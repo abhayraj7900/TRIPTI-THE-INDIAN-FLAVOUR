@@ -4,6 +4,7 @@ import {
   ArrowRight,
   BarChart3,
   Bell,
+  CalendarDays,
   Check,
   ChefHat,
   CircleDollarSign,
@@ -15,6 +16,8 @@ import {
   LayoutGrid,
   Minus,
   PackageOpen,
+  PackageCheck,
+  Pencil,
   Plus,
   Printer,
   ReceiptText,
@@ -22,8 +25,10 @@ import {
   ShoppingBag,
   Smartphone,
   Sparkles,
+  Trash2,
   TrendingUp,
   TriangleAlert,
+  Truck,
   UtensilsCrossed,
   WalletCards,
 } from 'lucide-react';
@@ -31,6 +36,16 @@ import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +56,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -49,11 +73,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import {
   categories,
   demoInventory,
   demoOrders,
   menu,
+  type BookingRecord,
   type MenuItem,
   type OrderRecord,
   type StockItem,
@@ -67,8 +93,10 @@ type CheckoutPayload = {
   customerName?: string;
   paymentMethod?: string;
   discount?: number;
+  notes?: string;
   items: { menuItemId: number; name: string; quantity: number; unitPrice: number }[];
 };
+type BookingPayload = Pick<BookingRecord, 'customerName' | 'phone' | 'guests' | 'bookingDate' | 'bookingTime' | 'tableNumber'> & { notes?: string };
 
 const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'pos', label: 'Point of sale', icon: LayoutGrid },
@@ -87,11 +115,6 @@ const headings: Record<View, { eyebrow: string; title: string }> = {
   inventory: { eyebrow: 'Last checked 10 minutes ago', title: 'Inventory' },
   reports: { eyebrow: 'Sunday, 7 September', title: 'Daily performance' },
 };
-
-const tableState = [
-  'seated', 'available', 'seated', 'reserved', 'seated', 'available', 'available', 'seated',
-  'available', 'reserved', 'seated', 'available', 'available', 'seated', 'available', 'reserved',
-] as const;
 
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 
@@ -129,6 +152,7 @@ async function createOrder(payload: CheckoutPayload): Promise<OrderRecord> {
       status: 'new',
       paymentStatus: payload.paymentMethod ? 'paid' : 'pending',
       paymentMethod: payload.paymentMethod ?? null,
+      notes: payload.notes ?? null,
       subtotal: fallbackSubtotal,
       tax: fallbackTax,
       discount: payload.discount ?? 0,
@@ -143,14 +167,16 @@ export function RestaurantSystem() {
   const [activeView, setActiveView] = useState<View>('pos');
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
-  const [cart, setCart] = useState<Cart>({ 3: 1, 7: 2 });
+  const [cart, setCart] = useState<Cart>({});
   const [orderType, setOrderType] = useState('Dine in');
   const [selectedTable, setSelectedTable] = useState('08');
   const [customerName, setCustomerName] = useState('');
   const [discount, setDiscount] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Pay later');
+  const [notes, setNotes] = useState('');
   const [orders, setOrders] = useState<OrderRecord[]>(demoOrders);
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [stock, setStock] = useState<StockItem[]>(demoInventory);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -171,6 +197,13 @@ export function RestaurantSystem() {
           const saved = new Map(result.inventory.map((item) => [item.id, item]));
           setStock((current) => current.map((item) => saved.get(item.id) ?? item));
         }
+      })
+      .catch(() => undefined);
+    fetch('/api/bookings')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const result = data as { bookings?: BookingRecord[] } | null;
+        if (result?.bookings) setBookings(result.bookings);
       })
       .catch(() => undefined);
   }, []);
@@ -223,6 +256,7 @@ export function RestaurantSystem() {
           tableNumber: { type: 'string' },
           customerName: { type: 'string' },
           paymentMethod: { type: 'string', enum: ['Cash', 'UPI', 'Card', 'Pay later'] },
+          notes: { type: 'string' },
           items: {
             type: 'array',
             minItems: 1,
@@ -239,14 +273,14 @@ export function RestaurantSystem() {
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       async execute(rawInput) {
-        const input = rawInput as { orderType?: string; tableNumber?: string; customerName?: string; paymentMethod?: string; items?: { menuItemId: number; quantity: number }[] };
+        const input = rawInput as { orderType?: string; tableNumber?: string; customerName?: string; paymentMethod?: string; notes?: string; items?: { menuItemId: number; quantity: number }[] };
         if (!input.items?.length || !['Dine in', 'Takeaway', 'Delivery'].includes(input.orderType ?? '')) throw new Error('A valid order type and at least one item are required.');
         const items = input.items.map((requested) => {
           const match = menu.find((item) => item.id === requested.menuItemId);
           if (!match || !Number.isInteger(requested.quantity) || requested.quantity < 1) throw new Error(`Invalid menu item ${requested.menuItemId}.`);
           return { menuItemId: match.id, name: match.name, quantity: requested.quantity, unitPrice: match.price };
         });
-        const created = await createOrder({ orderType: input.orderType!, tableNumber: input.tableNumber, customerName: input.customerName, paymentMethod: input.paymentMethod === 'Pay later' ? undefined : input.paymentMethod, items });
+        const created = await createOrder({ orderType: input.orderType!, tableNumber: input.tableNumber, customerName: input.customerName, paymentMethod: input.paymentMethod === 'Pay later' ? undefined : input.paymentMethod, notes: input.notes, items });
         setOrders((current) => [created, ...current]);
         setActiveView('kitchen');
         setNotice(`${created.orderNumber} sent to the kitchen`);
@@ -275,6 +309,7 @@ export function RestaurantSystem() {
       customerName: customerName || undefined,
       paymentMethod: paymentMethod === 'Pay later' ? undefined : paymentMethod,
       discount,
+      notes: notes || undefined,
       items: cartItems.map((item) => ({ menuItemId: item.id, name: item.name, quantity: cart[item.id], unitPrice: item.price })),
     });
     setSaving(false);
@@ -282,6 +317,7 @@ export function RestaurantSystem() {
     setCart({});
     setCustomerName('');
     setDiscount(0);
+    setNotes('');
     setActiveView('kitchen');
     setNotice(`${created.orderNumber} sent to the kitchen`);
   }
@@ -300,6 +336,72 @@ export function RestaurantSystem() {
     setOrderType('Dine in');
     setActiveView('pos');
     setNotice(`Table ${number} selected for a new order`);
+  }
+
+  async function createBooking(payload: BookingPayload) {
+    const response = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = (await response.json()) as { booking?: BookingRecord; error?: string };
+    if (!response.ok || !data.booking) throw new Error(data.error || 'Booking could not be saved');
+    setBookings((current) => [data.booking!, ...current]);
+    setNotice(`${data.booking.bookingNumber} booked for table ${data.booking.tableNumber}`);
+    return data.booking;
+  }
+
+  async function updateBookingStatus(booking: BookingRecord, status: BookingRecord['status']) {
+    setBookings((current) => current.map((item) => item.id === booking.id ? { ...item, status, updatedAt: Date.now() } : item));
+    const response = await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: booking.id, status }),
+    });
+    if (!response.ok) {
+      setBookings((current) => current.map((item) => item.id === booking.id ? booking : item));
+      setNotice('Booking update failed. Please try again.');
+      return;
+    }
+    setNotice(status === 'completed' ? `Table ${booking.tableNumber} is available again` : `${booking.bookingNumber} cancelled`);
+  }
+
+  async function updateOrder(updated: OrderRecord) {
+    if (updated.id.startsWith('demo-') || updated.id.startsWith('local-')) {
+      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      setNotice(`${updated.orderNumber} updated`);
+      return true;
+    }
+    const response = await fetch('/api/orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const data = (await response.json()) as { order?: Partial<OrderRecord>; error?: string };
+    if (!response.ok || !data.order) {
+      setNotice(data.error || 'Order update failed');
+      return false;
+    }
+    setOrders((current) => current.map((order) => order.id === updated.id ? { ...updated, ...data.order } : order));
+    setNotice(`${updated.orderNumber} updated`);
+    return true;
+  }
+
+  async function deleteOrder(order: OrderRecord) {
+    if (!order.id.startsWith('demo-') && !order.id.startsWith('local-')) {
+      const response = await fetch('/api/orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id }),
+      });
+      if (!response.ok) {
+        setNotice('Order could not be deleted');
+        return false;
+      }
+    }
+    setOrders((current) => current.filter((item) => item.id !== order.id));
+    setNotice(`${order.orderNumber} deleted`);
+    return true;
   }
 
   function updateStock(item: StockItem, amount: number) {
@@ -352,8 +454,8 @@ export function RestaurantSystem() {
 
           {activeView === 'pos' && <POSView {...{ category, setCategory, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }} />}
           {activeView === 'kitchen' && <KitchenView orders={orders} onAdvance={advanceOrder} />}
-          {activeView === 'tables' && <TablesView selectedTable={selectedTable} onSelect={chooseTable} />}
-          {activeView === 'orders' && <OrdersView orders={orders} />}
+          {activeView === 'tables' && <TablesView selectedTable={selectedTable} orders={orders} bookings={bookings} onSelect={chooseTable} onCreateBooking={createBooking} onUpdateBooking={updateBookingStatus} />}
+          {activeView === 'orders' && <OrdersView orders={orders} onUpdate={updateOrder} onDelete={deleteOrder} />}
           {activeView === 'inventory' && <InventoryView stock={stock} onAdjust={updateStock} />}
           {activeView === 'reports' && <ReportsView orders={orders} />}
         </section>
@@ -375,6 +477,7 @@ export function RestaurantSystem() {
             <label htmlFor="guest-name" className="space-y-2 text-sm font-bold sm:col-span-2">Guest name <span className="font-normal text-[#8b776d]">(optional)</span><Input id="guest-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="e.g. Mr Mehra" className="h-11 bg-white" /></label>
             {orderType === 'Dine in' && <label htmlFor="table-number" className="space-y-2 text-sm font-bold">Table<Input id="table-number" value={selectedTable} onChange={() => undefined} readOnly className="h-11 bg-[#f6f1eb]" /></label>}
             <label htmlFor="bill-discount" className="space-y-2 text-sm font-bold">Discount (₹)<Input id="bill-discount" type="number" min="0" max={subtotal} value={discount} onChange={(event) => setDiscount(Math.max(0, Number(event.target.value)))} className="h-11 bg-white" /></label>
+            <label htmlFor="kitchen-notes" className="space-y-2 text-sm font-bold sm:col-span-2">Kitchen notes <span className="font-normal text-[#8b776d]">(optional)</span><Textarea id="kitchen-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Less spicy, no onion, allergy note…" className="min-h-20 bg-white" /></label>
           </div>
           <div>
             <p className="mb-2 text-sm font-bold">Payment</p>
@@ -416,6 +519,7 @@ type POSProps = {
 
 function POSView({ category, setCategory, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }: POSProps) {
   const itemCount = cartItems.reduce((sum, item) => sum + cart[item.id], 0);
+  const [cartOpen, setCartOpen] = useState(false);
   return (
     <div className="grid min-h-[calc(100vh-76px)] xl:grid-cols-[minmax(0,1fr)_390px]">
       <section className="min-w-0 p-4 pb-28 md:p-7 xl:pb-7">
@@ -434,17 +538,36 @@ function POSView({ category, setCategory, query, setQuery, filtered, cart, cartI
         </div>
         {filtered.length ? <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">{filtered.map((item) => <MenuCard key={item.id} item={item} onAdd={() => changeQuantity(item.id, 1)} />)}</div> : <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-[#cfc4b9] bg-white/50 text-center"><div><Search className="mx-auto mb-3 size-7 text-[#9d897e]" /><p className="font-serif text-xl font-bold">No dishes found</p><p className="mt-1 text-sm text-[#7a6960]">Try another name or category.</p></div></div>}
       </section>
-      <aside className="border-l border-[#ded8ce] bg-[#faf8f4] p-5 max-xl:fixed max-xl:inset-x-3 max-xl:bottom-20 max-xl:z-30 max-xl:rounded-2xl max-xl:border max-xl:shadow-2xl md:p-6 xl:sticky xl:top-0 xl:h-[calc(100vh-76px)]">
-        <div className="mb-5 flex items-center justify-between max-xl:hidden"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#9a6d5b]">Current bill</p><h2 className="font-serif text-2xl font-bold">{orderType === 'Dine in' ? `Table ${selectedTable}` : orderType}</h2></div><Badge variant="secondary">{itemCount} items</Badge></div>
-        <div className="max-h-[calc(100vh-430px)] space-y-3 overflow-y-auto pr-1 max-xl:hidden xl:min-h-40">
+      <aside className="sticky top-0 hidden h-[calc(100vh-76px)] border-l border-[#ded8ce] bg-[#faf8f4] p-6 xl:block">
+        <div className="mb-5 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#9a6d5b]">Current bill</p><h2 className="font-serif text-2xl font-bold">{orderType === 'Dine in' ? `Table ${selectedTable}` : orderType}</h2></div><Badge variant="secondary">{itemCount} items</Badge></div>
+        <div className="min-h-40 max-h-[calc(100vh-430px)] space-y-3 overflow-y-auto pr-1">
           {!cartItems.length && <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed border-[#d8cec5] text-center"><div><ShoppingBag className="mx-auto mb-2 size-6 text-[#a99388]" /><p className="font-bold">The bill is empty</p><p className="mt-1 text-sm text-[#8b776d]">Add a dish to begin.</p></div></div>}
           {cartItems.map((item) => <CartRow key={item.id} item={item} quantity={cart[item.id]} onChange={changeQuantity} />)}
         </div>
-        <div className="mt-5 space-y-2 border-t border-dashed border-[#cfc4b9] pt-4 text-sm max-xl:hidden">
+        <div className="mt-5 space-y-2 border-t border-dashed border-[#cfc4b9] pt-4 text-sm">
           <div className="flex justify-between text-[#78675e]"><span>Subtotal</span><span>{rupees.format(subtotal)}</span></div><div className="flex justify-between text-[#78675e]"><span>GST (5%)</span><span>{rupees.format(tax)}</span></div>{discount > 0 && <div className="flex justify-between text-emerald-700"><span>Discount</span><span>−{rupees.format(discount)}</span></div>}<div className="flex justify-between pt-2 font-serif text-xl font-bold"><span>Total</span><span>{rupees.format(total)}</span></div>
         </div>
-        <Button onClick={() => setCheckoutOpen(true)} disabled={!cartItems.length} className="h-13 w-full rounded-xl bg-[#6d2416] text-base font-bold hover:bg-[#55180f]"><ReceiptText className="mr-1" /><span className="max-xl:hidden">Review bill · </span>{rupees.format(total)}</Button>
+        <Button onClick={() => setCheckoutOpen(true)} disabled={!cartItems.length} className="h-13 w-full rounded-xl bg-[#6d2416] text-base font-bold hover:bg-[#55180f]"><ReceiptText className="mr-1" />Review bill · {rupees.format(total)}</Button>
       </aside>
+      <button onClick={() => setCartOpen(true)} disabled={!cartItems.length} className="fixed inset-x-3 bottom-20 z-30 flex h-16 items-center justify-between rounded-2xl bg-[#6d2416] px-5 font-bold text-white shadow-2xl disabled:opacity-60 xl:hidden">
+        <span className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-full bg-white/10"><ShoppingBag className="size-5" /></span>{itemCount ? `${itemCount} items · Open cart` : 'Cart is empty'}</span>
+        <span>{rupees.format(total)} <ArrowRight className="ml-1 inline size-4" /></span>
+      </button>
+      <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+        <SheetContent side="bottom" className="max-h-[86vh] rounded-t-[26px] border-[#ded8ce] bg-[#faf8f4] p-0 xl:hidden">
+          <SheetHeader className="border-b border-[#ded8ce] bg-white px-5 py-4">
+            <SheetTitle className="font-serif text-2xl font-bold">Current bill</SheetTitle>
+            <SheetDescription>{orderType === 'Dine in' ? `Table ${selectedTable}` : orderType} · {itemCount} items</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-2">
+            {cartItems.map((item) => <CartRow key={item.id} item={item} quantity={cart[item.id]} onChange={changeQuantity} />)}
+          </div>
+          <SheetFooter className="border-t border-[#ded8ce] bg-white px-5 py-4">
+            <div className="mb-2 space-y-2 text-sm"><div className="flex justify-between text-[#78675e]"><span>Subtotal + GST</span><span>{rupees.format(subtotal + tax)}</span></div>{discount > 0 && <div className="flex justify-between text-emerald-700"><span>Discount</span><span>−{rupees.format(discount)}</span></div>}<div className="flex justify-between font-serif text-xl font-bold"><span>Total</span><span>{rupees.format(total)}</span></div></div>
+            <Button onClick={() => { setCartOpen(false); setCheckoutOpen(true); }} className="h-12 w-full rounded-xl bg-[#6d2416] text-base font-bold hover:bg-[#55180f]">Review order <ArrowRight /></Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -474,19 +597,87 @@ function KitchenView({ orders, onAdvance }: { orders: OrderRecord[]; onAdvance: 
 }
 
 function Ticket({ order, onAdvance }: { order: OrderRecord; onAdvance: (order: OrderRecord) => void }) {
-  const label = order.status === 'new' ? 'Start cooking' : order.status === 'preparing' ? 'Mark ready' : 'Serve order';
-  return <article className="rounded-2xl border border-[#ded8ce] bg-white p-4 shadow-[0_6px_20px_rgba(55,35,22,.06)]"><div className="flex items-start justify-between"><div><p className="font-serif text-lg font-bold">{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || order.orderType}</p><p className="mt-0.5 text-xs font-bold text-[#8f796e]">{order.orderNumber} · {order.orderType}</p></div><span className="flex items-center gap-1 rounded-full bg-[#f3eee8] px-2.5 py-1 text-xs font-bold"><Clock3 className="size-3" />{elapsed(order.createdAt)}</span></div><div className="my-4 space-y-2 border-y border-dashed border-[#ddd3ca] py-3">{order.items?.map((item) => <div key={`${order.id}-${item.menuItemId}`} className="flex gap-3 text-sm"><span className="font-bold text-[#6d2416]">{item.quantity}×</span><span>{item.name}</span></div>) ?? <p className="text-sm text-[#7e6c62]">Order details available at the pass</p>}</div><Button onClick={() => onAdvance(order)} variant={order.status === 'ready' ? 'default' : 'outline'} className={order.status === 'ready' ? 'h-10 w-full bg-emerald-700 hover:bg-emerald-800' : 'h-10 w-full bg-white'}>{label}<ArrowRight className="ml-1" /></Button></article>;
+  const isDineIn = order.orderType === 'Dine in';
+  const serviceInstruction = isDineIn ? `Serve at table ${order.tableNumber || '—'}` : order.orderType === 'Delivery' ? 'Pack for delivery' : 'Pack for takeaway';
+  const label = order.status === 'new' ? 'Start cooking' : order.status === 'preparing' ? 'Mark ready' : isDineIn ? 'Mark served' : 'Mark handed over';
+  const ServiceIcon = isDineIn ? UtensilsCrossed : order.orderType === 'Delivery' ? Truck : PackageCheck;
+  return <article className="rounded-2xl border border-[#ded8ce] bg-white p-4 shadow-[0_6px_20px_rgba(55,35,22,.06)]"><div className="flex items-start justify-between gap-3"><div><p className="font-serif text-lg font-bold">{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || order.orderType}</p><p className="mt-0.5 text-xs font-bold text-[#8f796e]">{order.orderNumber}{order.customerName ? ` · ${order.customerName}` : ''}</p></div><span className="flex shrink-0 items-center gap-1 rounded-full bg-[#f3eee8] px-2.5 py-1 text-xs font-bold"><Clock3 className="size-3" />{elapsed(order.createdAt)}</span></div><div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${isDineIn ? 'bg-blue-50 text-blue-800' : order.orderType === 'Delivery' ? 'bg-violet-50 text-violet-800' : 'bg-amber-50 text-amber-800'}`}><ServiceIcon className="size-4" />{serviceInstruction}</div><div className="my-4 space-y-2 border-y border-dashed border-[#ddd3ca] py-3">{order.items?.length ? order.items.map((item) => <div key={`${order.id}-${item.menuItemId}`} className="flex gap-3 text-sm"><span className="font-bold text-[#6d2416]">{item.quantity}×</span><span>{item.name}</span></div>) : <p className="text-sm text-[#7e6c62]">No item details found</p>}</div>{order.notes && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"><b className="block text-xs uppercase tracking-wide">Kitchen note</b><span>{order.notes}</span></div>}<Button onClick={() => onAdvance(order)} variant={order.status === 'ready' ? 'default' : 'outline'} className={order.status === 'ready' ? 'h-10 w-full bg-emerald-700 hover:bg-emerald-800' : 'h-10 w-full bg-white'}>{label}<ArrowRight className="ml-1" /></Button></article>;
 }
 
-function TablesView({ selectedTable, onSelect }: { selectedTable: string; onSelect: (table: string) => void }) {
-  const counts = tableState.reduce((acc, value) => ({ ...acc, [value]: (acc[value] ?? 0) + 1 }), {} as Record<string, number>);
-  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-6 flex flex-wrap gap-3 text-sm font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{counts.available} available</span><span className="rounded-full bg-[#f9e8df] px-3 py-1.5 text-[#8b321d]">{counts.seated} seated</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{counts.reserved} reserved</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{tableState.map((status, index) => { const number = String(index + 1).padStart(2, '0'); const seatedOrder = demoOrders.find((order) => order.tableNumber === number && order.status !== 'completed'); return <button key={number} onClick={() => onSelect(number)} className={`min-h-44 rounded-[24px] border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${selectedTable === number ? 'border-[#6d2416] ring-2 ring-[#6d2416]/15' : 'border-[#ded8ce]'} ${status === 'available' ? 'bg-white' : status === 'seated' ? 'bg-[#fff3ed]' : 'bg-[#fff9e7]'}`}><div className="flex items-start justify-between"><div className={`grid size-12 place-items-center rounded-2xl ${status === 'available' ? 'bg-emerald-100 text-emerald-800' : status === 'seated' ? 'bg-[#6d2416] text-white' : 'bg-amber-200 text-amber-900'}`}><UtensilsCrossed className="size-5" /></div><Badge variant="outline" className="capitalize">{status}</Badge></div><p className="mt-5 font-serif text-2xl font-bold">Table {number}</p><p className="mt-1 text-sm text-[#7c6960]">{seatedOrder ? `${seatedOrder.orderNumber} · ${rupees.format(seatedOrder.total)}` : status === 'reserved' ? 'Reserved for 8:30 PM' : status === 'seated' ? 'Guest bill in progress' : 'Tap to start an order'}</p></button>; })}</div></section>;
+function TablesView({ selectedTable, orders, bookings, onSelect, onCreateBooking, onUpdateBooking }: { selectedTable: string; orders: OrderRecord[]; bookings: BookingRecord[]; onSelect: (table: string) => void; onCreateBooking: (payload: BookingPayload) => Promise<BookingRecord>; onUpdateBooking: (booking: BookingRecord, status: BookingRecord['status']) => Promise<void> }) {
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [preferredTable, setPreferredTable] = useState('01');
+  const tables = Array.from({ length: 16 }, (_, index) => {
+    const number = String(index + 1).padStart(2, '0');
+    const activeOrder = orders.find((order) => order.tableNumber === number && ['new', 'preparing', 'ready'].includes(order.status));
+    const booking = bookings.find((item) => item.tableNumber === number && item.status === 'booked');
+    return { number, activeOrder, booking, status: activeOrder ? 'seated' : booking ? 'reserved' : 'available' };
+  });
+  const counts = tables.reduce((acc, table) => ({ ...acc, [table.status]: (acc[table.status] ?? 0) + 1 }), {} as Record<string, number>);
+  function openBooking(table = '01') { setPreferredTable(table); setBookingOpen(true); }
+  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex flex-wrap gap-3 text-sm font-bold"><span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{counts.available ?? 0} available</span><span className="rounded-full bg-[#f9e8df] px-3 py-1.5 text-[#8b321d]">{counts.seated ?? 0} seated</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{counts.reserved ?? 0} booked</span></div><Button onClick={() => openBooking()} className="bg-[#6d2416] hover:bg-[#55180f]"><CalendarDays /> Book a table</Button></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{tables.map(({ number, status, activeOrder, booking }) => <article key={number} className={`min-h-56 rounded-[24px] border p-5 transition ${selectedTable === number ? 'border-[#6d2416] ring-2 ring-[#6d2416]/15' : 'border-[#ded8ce]'} ${status === 'available' ? 'bg-white' : status === 'seated' ? 'bg-[#fff3ed]' : 'bg-[#fff9e7]'}`}><div className="flex items-start justify-between"><div className={`grid size-12 place-items-center rounded-2xl ${status === 'available' ? 'bg-emerald-100 text-emerald-800' : status === 'seated' ? 'bg-[#6d2416] text-white' : 'bg-amber-200 text-amber-900'}`}><UtensilsCrossed className="size-5" /></div><Badge variant="outline" className="capitalize">{status === 'reserved' ? 'booked' : status}</Badge></div><p className="mt-4 font-serif text-2xl font-bold">Table {number}</p>{activeOrder ? <p className="mt-1 text-sm text-[#7c6960]">{activeOrder.orderNumber} · {rupees.format(activeOrder.total)}</p> : booking ? <div className="mt-1 text-sm text-[#7c6960]"><p className="font-bold text-[#5d3424]">{booking.customerName} · {booking.guests} guests</p><p>{booking.bookingDate} at {booking.bookingTime}</p></div> : <p className="mt-1 text-sm text-[#7c6960]">Ready for a new booking or order</p>}<div className="mt-4 flex flex-wrap gap-2">{status === 'available' && <><Button onClick={() => openBooking(number)} variant="outline" size="sm"><CalendarDays /> Book</Button><Button onClick={() => onSelect(number)} size="sm" className="bg-[#6d2416] hover:bg-[#55180f]">Start order</Button></>}{status === 'reserved' && booking && <><Button onClick={() => onSelect(number)} size="sm" className="bg-[#6d2416] hover:bg-[#55180f]">Seat & order</Button><Button onClick={() => onUpdateBooking(booking, 'completed')} variant="outline" size="sm"><Check /> Complete</Button><Button onClick={() => onUpdateBooking(booking, 'cancelled')} variant="ghost" size="sm" className="text-red-700">Cancel</Button></>}{status === 'seated' && <Button onClick={() => onSelect(number)} size="sm" className="bg-[#6d2416] hover:bg-[#55180f]">Open POS</Button>}</div></article>)}</div><StaffBookingDialog open={bookingOpen} onOpenChange={setBookingOpen} preferredTable={preferredTable} onCreate={onCreateBooking} /></section>;
 }
 
-function OrdersView({ orders }: { orders: OrderRecord[] }) {
+function StaffBookingDialog({ open, onOpenChange, preferredTable, onCreate }: { open: boolean; onOpenChange: (open: boolean) => void; preferredTable: string; onCreate: (payload: BookingPayload) => Promise<BookingRecord> }) {
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [guests, setGuests] = useState(2);
+  const [bookingDate, setBookingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bookingTime, setBookingTime] = useState('19:30');
+  const [tableNumber, setTableNumber] = useState(preferredTable);
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setTableNumber(preferredTable), [preferredTable]);
+  async function submit() {
+    setError(''); setSaving(true);
+    try {
+      await onCreate({ customerName, phone, guests, bookingDate, bookingTime, tableNumber: tableNumber.padStart(2, '0'), notes });
+      setCustomerName(''); setPhone(''); setNotes(''); onOpenChange(false);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Booking could not be saved'); }
+    finally { setSaving(false); }
+  }
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] overflow-y-auto rounded-[22px] sm:max-w-lg"><DialogHeader><DialogTitle className="font-serif text-2xl font-bold">Book a table</DialogTitle><DialogDescription>Create a staff booking. The table will show as booked until it is completed or cancelled.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-bold sm:col-span-2">Customer name<Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Guest name" /></label><label className="space-y-2 text-sm font-bold">Phone<Input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Mobile number" /></label><label className="space-y-2 text-sm font-bold">Guests<Input type="number" min="1" max="20" value={guests} onChange={(event) => setGuests(Number(event.target.value))} /></label><label className="space-y-2 text-sm font-bold">Date<Input type="date" min={new Date().toISOString().slice(0, 10)} value={bookingDate} onChange={(event) => setBookingDate(event.target.value)} /></label><label className="space-y-2 text-sm font-bold">Time<Input type="time" value={bookingTime} onChange={(event) => setBookingTime(event.target.value)} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Table number<Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="01" /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Booking notes <span className="font-normal text-[#8b776d]">(optional)</span><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Birthday setup, high chair…" /></label>{error && <p className="text-sm font-bold text-red-700 sm:col-span-2">{error}</p>}</div><DialogFooter><Button onClick={submit} disabled={saving || !customerName.trim() || !phone.trim() || !bookingDate || !bookingTime || !tableNumber} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Confirm booking'}</Button></DialogFooter></DialogContent></Dialog>;
+}
+
+function OrdersView({ orders, onUpdate, onDelete }: { orders: OrderRecord[]; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<OrderRecord | null>(null);
   const shown = orders.filter((order) => `${order.orderNumber} ${order.customerName ?? ''} ${order.tableNumber ?? ''}`.toLowerCase().includes(search.toLowerCase()));
-  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-5 grid gap-3 sm:grid-cols-3"><MetricCard icon={ReceiptText} label="Orders today" value="86" note="+12% from last Sunday" /><MetricCard icon={CircleDollarSign} label="Net sales" value="₹72,480" note="₹843 average bill" /><MetricCard icon={WalletCards} label="Pending bills" value={rupees.format(orders.filter((order) => order.paymentStatus === 'pending').reduce((sum, order) => sum + order.total, 0))} note={`${orders.filter((order) => order.paymentStatus === 'pending').length} open tables`} /></div><div className="rounded-[22px] border border-[#ded8ce] bg-white p-4 shadow-sm md:p-5"><div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-serif text-xl font-bold">Order register</h2><p className="text-sm text-[#7d6a60]">Payments and service status in one place</p></div><div className="relative sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#907d73]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, guest or table" className="h-10 pl-9" /></div></div><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Guest / table</TableHead><TableHead>Channel</TableHead><TableHead>Status</TableHead><TableHead>Payment</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Bill</TableHead></TableRow></TableHeader><TableBody>{shown.map((order) => <TableRow key={order.id}><TableCell><p className="font-bold">{order.orderNumber}</p><p className="text-xs text-[#8b776d]">{new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></TableCell><TableCell>{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</TableCell><TableCell>{order.orderType}</TableCell><TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(order.status)}`}>{order.status}</span></TableCell><TableCell><span className={order.paymentStatus === 'paid' ? 'font-bold text-emerald-700' : 'font-bold text-amber-700'}>{order.paymentStatus === 'paid' ? order.paymentMethod || 'Paid' : 'Pending'}</span></TableCell><TableCell className="text-right font-bold">{rupees.format(order.total)}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={`Print ${order.orderNumber}`}><Printer /></Button></TableCell></TableRow>)}</TableBody></Table></div></section>;
+  const sales = orders.filter((order) => order.status !== 'cancelled').reduce((sum, order) => sum + order.total, 0);
+  const pending = orders.filter((order) => order.paymentStatus === 'pending');
+  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-5 grid gap-3 sm:grid-cols-3"><MetricCard icon={ReceiptText} label="Orders" value={String(orders.length)} note={`${orders.filter((order) => ['new', 'preparing', 'ready'].includes(order.status)).length} active now`} /><MetricCard icon={CircleDollarSign} label="Net sales" value={rupees.format(sales)} note={orders.length ? `${rupees.format(Math.round(sales / orders.length))} average bill` : 'No orders yet'} /><MetricCard icon={WalletCards} label="Pending bills" value={rupees.format(pending.reduce((sum, order) => sum + order.total, 0))} note={`${pending.length} awaiting payment`} /></div><div className="overflow-hidden rounded-[22px] border border-[#ded8ce] bg-white p-4 shadow-sm md:p-5"><div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-serif text-xl font-bold">Order register</h2><p className="text-sm text-[#7d6a60]">Open any order to see details, edit it or delete it</p></div><div className="relative sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#907d73]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, guest or table" className="h-10 pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Guest / table</TableHead><TableHead>Channel</TableHead><TableHead>Status</TableHead><TableHead>Payment</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{shown.map((order) => <TableRow key={order.id}><TableCell><p className="font-bold">{order.orderNumber}</p><p className="text-xs text-[#8b776d]">{new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></TableCell><TableCell>{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</TableCell><TableCell>{order.orderType}</TableCell><TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(order.status)}`}>{order.status}</span></TableCell><TableCell><span className={order.paymentStatus === 'paid' ? 'font-bold text-emerald-700' : 'font-bold text-amber-700'}>{order.paymentStatus === 'paid' ? order.paymentMethod || 'Paid' : 'Pending'}</span></TableCell><TableCell className="text-right font-bold">{rupees.format(order.total)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button onClick={() => setSelected(order)} variant="ghost" size="icon-sm" aria-label={`View ${order.orderNumber}`}><Eye /></Button><Button variant="ghost" size="icon-sm" aria-label={`Print ${order.orderNumber}`}><Printer /></Button></div></TableCell></TableRow>)}</TableBody></Table></div></div><OrderDetailsDialog order={selected} onOpenChange={(open) => { if (!open) setSelected(null); }} onUpdate={async (updated) => { const saved = await onUpdate(updated); if (saved) setSelected(updated); return saved; }} onDelete={async (deletedOrder) => { const deleted = await onDelete(deletedOrder); if (deleted) setSelected(null); return deleted; }} /></section>;
+}
+
+function OrderDetailsDialog({ order, onOpenChange, onUpdate, onDelete }: { order: OrderRecord | null; onOpenChange: (open: boolean) => void; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
+  const [draft, setDraft] = useState<OrderRecord | null>(order);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  useEffect(() => { setDraft(order ? { ...order, items: order.items?.map((item) => ({ ...item })) } : null); setEditing(false); }, [order]);
+  if (!order || !draft) return null;
+  const editItems = draft.items ?? [];
+  function changeItem(menuItemId: number, amount: number) {
+    setDraft((current) => current ? { ...current, items: (current.items ?? []).map((item) => item.menuItemId === menuItemId ? { ...item, quantity: Math.max(0, item.quantity + amount) } : item).filter((item) => item.quantity > 0) } : current);
+  }
+  async function save() {
+    setSaving(true);
+    const subtotal = editItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const tax = Math.round(subtotal * 0.05);
+    const discount = Math.max(0, Math.min(draft.discount, subtotal));
+    const updated = { ...draft, subtotal, tax, discount, total: subtotal + tax - discount };
+    if (await onUpdate(updated)) { setDraft(updated); setEditing(false); }
+    setSaving(false);
+  }
+  return <Dialog open={Boolean(order)} onOpenChange={onOpenChange}><DialogContent className="max-h-[94vh] overflow-y-auto rounded-[22px] sm:max-w-2xl"><DialogHeader><div className="flex items-start justify-between gap-4 pr-8"><div><DialogTitle className="font-serif text-2xl font-bold">{draft.orderNumber}</DialogTitle><DialogDescription>{new Date(draft.createdAt).toLocaleString('en-IN')} · {draft.orderType}</DialogDescription></div><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(draft.status)}`}>{draft.status}</span></div></DialogHeader>{editing ? <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><EditSelect label="Order type" value={draft.orderType} options={['Dine in', 'Takeaway', 'Delivery']} onChange={(orderType) => setDraft({ ...draft, orderType, tableNumber: orderType === 'Dine in' ? draft.tableNumber : null })} /><EditSelect label="Order status" value={draft.status} options={['new', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(status) => setDraft({ ...draft, status })} />{draft.orderType === 'Dine in' && <label className="space-y-2 text-sm font-bold">Table number<Input value={draft.tableNumber ?? ''} onChange={(event) => setDraft({ ...draft, tableNumber: event.target.value })} /></label>}<label className="space-y-2 text-sm font-bold">Customer name<Input value={draft.customerName ?? ''} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} /></label><EditSelect label="Payment status" value={draft.paymentStatus} options={['pending', 'paid', 'refunded']} onChange={(paymentStatus) => setDraft({ ...draft, paymentStatus })} /><EditSelect label="Payment method" value={draft.paymentMethod ?? 'Pay later'} options={['Pay later', 'Cash', 'UPI', 'Card']} onChange={(paymentMethod) => setDraft({ ...draft, paymentMethod: paymentMethod === 'Pay later' ? null : paymentMethod })} /><label className="space-y-2 text-sm font-bold">Discount (₹)<Input type="number" min="0" value={draft.discount} onChange={(event) => setDraft({ ...draft, discount: Math.max(0, Number(event.target.value)) })} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Kitchen notes<Textarea value={draft.notes ?? ''} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label></div><div><p className="mb-3 text-sm font-bold">Order items</p><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex items-center gap-3 rounded-xl border border-[#e3d9cf] p-3"><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7d6a60]">{rupees.format(item.unitPrice)} each</p></div><div className="flex items-center gap-2"><Button onClick={() => changeItem(item.menuItemId, -1)} variant="outline" size="icon-sm"><Minus /></Button><b>{item.quantity}</b><Button onClick={() => changeItem(item.menuItemId, 1)} variant="outline" size="icon-sm"><Plus /></Button></div></div>)}</div></div></div> : <div className="space-y-5"><div className="grid gap-3 rounded-2xl bg-[#f6f1eb] p-4 text-sm sm:grid-cols-2"><Detail label="Guest" value={draft.customerName || 'Walk-in'} /><Detail label="Table / channel" value={draft.tableNumber ? `Table ${draft.tableNumber}` : draft.orderType} /><Detail label="Payment" value={draft.paymentStatus === 'paid' ? `${draft.paymentMethod || 'Paid'} · paid` : draft.paymentStatus} /><Detail label="Order status" value={draft.status} /></div><div><h3 className="mb-3 font-serif text-lg font-bold">Items</h3><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex justify-between rounded-xl border border-[#e3d9cf] px-3 py-2 text-sm"><span><b className="mr-2 text-[#6d2416]">{item.quantity}×</b>{item.name}</span><b>{rupees.format(item.quantity * item.unitPrice)}</b></div>)}</div></div>{draft.notes && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm"><b>Kitchen note:</b> {draft.notes}</div>}<div className="space-y-2 border-t border-dashed border-[#d7c9be] pt-4 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{rupees.format(draft.subtotal)}</span></div><div className="flex justify-between"><span>GST</span><span>{rupees.format(draft.tax)}</span></div>{draft.discount > 0 && <div className="flex justify-between text-emerald-700"><span>Discount</span><span>−{rupees.format(draft.discount)}</span></div>}<div className="flex justify-between pt-2 font-serif text-xl font-bold"><span>Total</span><span>{rupees.format(draft.total)}</span></div></div></div>}<DialogFooter className="flex-row justify-between sm:justify-between"><Button onClick={() => setDeleteOpen(true)} variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"><Trash2 /> Delete</Button><div className="flex gap-2">{editing ? <><Button onClick={() => { setDraft({ ...order, items: order.items?.map((item) => ({ ...item })) }); setEditing(false); }} variant="outline">Cancel</Button><Button onClick={save} disabled={saving || !editItems.length} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Save changes'}</Button></> : <Button onClick={() => setEditing(true)} className="bg-[#6d2416] hover:bg-[#55180f]"><Pencil /> Edit order</Button>}</div></DialogFooter><AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {draft.orderNumber}?</AlertDialogTitle><AlertDialogDescription>This removes the order and all its item details. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep order</AlertDialogCancel><AlertDialogAction onClick={async () => { if (await onDelete(order)) setDeleteOpen(false); }} className="bg-red-700 hover:bg-red-800"><Trash2 /> Delete order</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></DialogContent></Dialog>;
+}
+
+function EditSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return <label className="space-y-2 text-sm font-bold">{label}<Select value={value} onValueChange={(next) => next && onChange(String(next))}><SelectTrigger className="h-9 w-full bg-white"><SelectValue /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}><span className="capitalize">{option}</span></SelectItem>)}</SelectContent></Select></label>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-xs font-bold uppercase tracking-wide text-[#947d71]">{label}</p><p className="mt-1 font-bold capitalize">{value}</p></div>;
 }
 
 function InventoryView({ stock, onAdjust }: { stock: StockItem[]; onAdjust: (item: StockItem, amount: number) => void }) {

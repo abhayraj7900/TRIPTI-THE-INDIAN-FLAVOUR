@@ -159,12 +159,28 @@ export type OrderRecord = {
   status: string;
   paymentStatus: string;
   paymentMethod: string | null;
+  notes?: string | null;
   subtotal: number;
   tax: number;
   discount: number;
   total: number;
   createdAt: number;
   items?: { menuItemId: number; name: string; quantity: number; unitPrice: number }[];
+};
+
+export type BookingRecord = {
+  id: string;
+  bookingNumber: string;
+  customerName: string;
+  phone: string;
+  guests: number;
+  bookingDate: string;
+  bookingTime: string;
+  tableNumber: string;
+  notes: string | null;
+  status: 'booked' | 'completed' | 'cancelled';
+  createdAt: number;
+  updatedAt: number;
 };
 
 const now = Date.now();

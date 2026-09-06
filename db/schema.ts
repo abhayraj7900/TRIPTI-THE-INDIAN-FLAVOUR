@@ -11,6 +11,7 @@ export const orders = sqliteTable(
     status: text('status').notNull().default('new'),
     paymentStatus: text('payment_status').notNull().default('pending'),
     paymentMethod: text('payment_method'),
+    notes: text('notes'),
     subtotal: integer('subtotal').notNull(),
     tax: integer('tax').notNull(),
     discount: integer('discount').notNull().default(0),
@@ -48,5 +49,28 @@ export const inventory = sqliteTable('inventory', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const tableBookings = sqliteTable(
+  'table_bookings',
+  {
+    id: text('id').primaryKey(),
+    bookingNumber: text('booking_number').notNull().unique(),
+    customerName: text('customer_name').notNull(),
+    phone: text('phone').notNull(),
+    guests: integer('guests').notNull(),
+    bookingDate: text('booking_date').notNull(),
+    bookingTime: text('booking_time').notNull(),
+    tableNumber: text('table_number').notNull(),
+    notes: text('notes'),
+    status: text('status').notNull().default('booked'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_bookings_status_date').on(table.status, table.bookingDate),
+    index('idx_bookings_table_slot').on(table.tableNumber, table.bookingDate, table.bookingTime),
+  ],
+);
+
 export type Order = typeof orders.$inferSelect;
 export type InventoryItem = typeof inventory.$inferSelect;
+export type TableBooking = typeof tableBookings.$inferSelect;

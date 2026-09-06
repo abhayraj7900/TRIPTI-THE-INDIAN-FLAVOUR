@@ -1,12 +1,13 @@
 'use client';
 
-import { ArrowLeft, Banknote, Check, ChevronRight, Clock3, CreditCard, Minus, Plus, ReceiptText, Search, ShieldCheck, ShoppingBag, Smartphone, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, Banknote, CalendarDays, Check, ChevronRight, Clock3, CreditCard, Minus, Plus, ReceiptText, Search, ShieldCheck, ShoppingBag, Smartphone, Sparkles, Users, UtensilsCrossed } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { categories, menu, type MenuItem } from '@/lib/restaurant-data';
+import { Textarea } from '@/components/ui/textarea';
+import { categories, menu, type BookingRecord, type MenuItem } from '@/lib/restaurant-data';
 
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 const paymentOptions = [
@@ -40,6 +41,8 @@ export function GuestMenu() {
   const [tableNumber, setTableNumber] = useState('05');
   const [guest, setGuest] = useState('');
   const [phone, setPhone] = useState('');
+  const [kitchenNotes, setKitchenNotes] = useState('');
+  const [reservationOpen, setReservationOpen] = useState(false);
   const [payment, setPayment] = useState<(typeof paymentOptions)[number]['name']>('Pay at counter');
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState('');
@@ -78,6 +81,7 @@ export function GuestMenu() {
       orderType,
       tableNumber: orderType === 'Dine in' ? tableNumber.trim() : undefined,
       customerName: phone.trim() ? `${guest.trim()} · ${phone.trim()}` : guest.trim(),
+      notes: kitchenNotes.trim() || undefined,
       items: cartItems.map((item) => ({ menuItemId: item.id, name: item.name, quantity: cart[item.id], unitPrice: item.price })),
     };
     try {
@@ -90,6 +94,7 @@ export function GuestMenu() {
     } finally {
       setSaving(false);
       setCart({});
+      setKitchenNotes('');
       setCheckoutStep(3);
     }
   }
@@ -103,6 +108,7 @@ export function GuestMenu() {
             <img src="/tripti-logo.png" alt="" className="h-12 w-32 object-contain sm:w-40" />
           </button>
           <div className="flex items-center gap-2">
+            <button onClick={() => setReservationOpen(true)} className="flex items-center gap-2 rounded-full border border-[#ded3c8] bg-white px-3 py-2 text-sm font-extrabold text-[#6a2116] sm:px-4"><CalendarDays className="size-4" /><span className="hidden sm:inline">Book a table</span></button>
             <button onClick={() => { setOrderType('Dine in'); openCheckout(); }} className="hidden items-center gap-2 rounded-full bg-[#f4e9dc] px-4 py-2 text-sm font-extrabold text-[#6a2116] sm:flex"><UtensilsCrossed className="size-4" /> Table {tableNumber || '—'}</button>
             <button onClick={openCheckout} className="relative grid size-11 place-items-center rounded-full bg-[#6a2116] text-white shadow-sm" aria-label={`Open cart with ${count} items`}><ShoppingBag className="size-5" />{count > 0 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-[#f6a81b] text-[11px] font-black text-[#351008]">{count}</span>}</button>
             <button onClick={() => { window.location.href = '/'; }} className="grid size-11 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d]" aria-label="Open staff system"><ArrowLeft className="size-5" /></button>
@@ -166,7 +172,7 @@ export function GuestMenu() {
               <div className="bg-[#45150e] px-6 py-6 text-white sm:px-8"><DialogHeader><DialogTitle className="font-serif text-2xl font-black">Complete your order</DialogTitle><DialogDescription className="text-orange-50/65">Review, add table details and choose payment.</DialogDescription></DialogHeader><div className="mt-5 grid grid-cols-3 gap-2">{['Basket', 'Details', 'Payment'].map((label, index) => <div key={label} className={`rounded-xl px-2 py-2 text-center text-xs font-extrabold ${checkoutStep === index ? 'bg-[#f6a81b] text-[#351008]' : checkoutStep > index ? 'bg-emerald-700 text-white' : 'bg-white/10 text-white/65'}`}>{checkoutStep > index ? '✓ ' : `${index + 1}. `}{label}</div>)}</div></div>
               <div className="p-6 sm:p-8">
                 {checkoutStep === 0 && <div><div className="mb-4 flex items-center justify-between"><h3 className="font-serif text-xl font-black">Your basket</h3><span className="text-sm font-bold text-[#806b61]">{count} items</span></div><div className="max-h-72 space-y-3 overflow-y-auto pr-1">{cartItems.map((item) => <CheckoutRow key={item.id} item={item} quantity={cart[item.id]} change={change} />)}</div><OrderTotal subtotal={subtotal} tax={tax} total={total} /></div>}
-                {checkoutStep === 1 && <DetailsStep orderType={orderType} setOrderType={setOrderType} tableNumber={tableNumber} setTableNumber={setTableNumber} guest={guest} setGuest={setGuest} phone={phone} setPhone={setPhone} />}
+                {checkoutStep === 1 && <DetailsStep orderType={orderType} setOrderType={setOrderType} tableNumber={tableNumber} setTableNumber={setTableNumber} guest={guest} setGuest={setGuest} phone={phone} setPhone={setPhone} kitchenNotes={kitchenNotes} setKitchenNotes={setKitchenNotes} />}
                 {checkoutStep === 2 && <PaymentStep payment={payment} setPayment={setPayment} total={total} />}
                 <div className="mt-7 flex items-center justify-between gap-3 border-t border-[#e4d9cf] pt-5">{checkoutStep > 0 ? <Button variant="outline" onClick={() => setCheckoutStep((current) => Math.max(0, current - 1))} className="h-12 rounded-full px-5">Back</Button> : <span />}{checkoutStep < 2 ? <Button onClick={() => setCheckoutStep((current) => current + 1)} disabled={checkoutStep === 0 ? !cartItems.length : !guest.trim() || (orderType === 'Dine in' && !tableNumber.trim())} className="h-12 rounded-full bg-[#6a2116] px-6 font-black hover:bg-[#521008]">Continue <ChevronRight /></Button> : <Button onClick={placeOrder} disabled={saving} className="h-12 rounded-full bg-[#f6a81b] px-6 font-black text-[#351008] hover:bg-[#e99a08]">{saving ? 'Sending order…' : `Place order · ${rupees.format(total)}`}</Button>}</div>
               </div>
@@ -174,6 +180,7 @@ export function GuestMenu() {
           )}
         </DialogContent>
       </Dialog>
+      <ReservationDialog open={reservationOpen} onOpenChange={setReservationOpen} />
     </main>
   );
 }
@@ -203,10 +210,36 @@ type DetailsProps = {
   setGuest: (value: string) => void;
   phone: string;
   setPhone: (value: string) => void;
+  kitchenNotes: string;
+  setKitchenNotes: (value: string) => void;
 };
 
-function DetailsStep({ orderType, setOrderType, tableNumber, setTableNumber, guest, setGuest, phone, setPhone }: DetailsProps) {
-  return <div className="space-y-5"><div><h3 className="font-serif text-xl font-black">How should we serve you?</h3><p className="mt-1 text-sm text-[#806b61]">Table number helps the kitchen send your order to the right place.</p></div><div className="grid grid-cols-2 gap-3">{(['Dine in', 'Takeaway'] as const).map((type) => <button key={type} onClick={() => setOrderType(type)} className={`rounded-2xl border p-4 text-left transition ${orderType === type ? 'border-[#6a2116] bg-[#fff4e7] ring-2 ring-[#6a2116]/10' : 'border-[#ded3c8] bg-white'}`}><UtensilsCrossed className={`size-5 ${orderType === type ? 'text-[#8a2f1d]' : 'text-[#8b776e]'}`} /><b className="mt-3 block">{type === 'Dine in' ? 'Dine at table' : 'Takeaway'}</b><span className="mt-1 block text-xs text-[#806b61]">{type === 'Dine in' ? 'Serve at your table' : 'Collect at the counter'}</span></button>)}</div><div className={`grid gap-4 ${orderType === 'Dine in' ? 'sm:grid-cols-[120px_1fr]' : ''}`}>{orderType === 'Dine in' && <label htmlFor="guest-table" className="block space-y-2 text-sm font-extrabold">Table no.<Input id="guest-table" value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/[^0-9A-Za-z-]/g, '').slice(0, 3))} placeholder="05" className="h-12 text-base" /></label>}<label htmlFor="guest-name" className="block space-y-2 text-sm font-extrabold">Your name<Input id="guest-name" value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="Name for the order" className="h-12 text-base" /></label></div><label htmlFor="guest-phone" className="block space-y-2 text-sm font-extrabold">Mobile number <span className="font-medium text-[#8b776d]">(optional)</span><Input id="guest-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} placeholder="For order updates" inputMode="tel" className="h-12 text-base" /></label></div>;
+function DetailsStep({ orderType, setOrderType, tableNumber, setTableNumber, guest, setGuest, phone, setPhone, kitchenNotes, setKitchenNotes }: DetailsProps) {
+  return <div className="space-y-5"><div><h3 className="font-serif text-xl font-black">How should we serve you?</h3><p className="mt-1 text-sm text-[#806b61]">Table number helps the kitchen send your order to the right place.</p></div><div className="grid grid-cols-2 gap-3">{(['Dine in', 'Takeaway'] as const).map((type) => <button key={type} onClick={() => setOrderType(type)} className={`rounded-2xl border p-4 text-left transition ${orderType === type ? 'border-[#6a2116] bg-[#fff4e7] ring-2 ring-[#6a2116]/10' : 'border-[#ded3c8] bg-white'}`}><UtensilsCrossed className={`size-5 ${orderType === type ? 'text-[#8a2f1d]' : 'text-[#8b776e]'}`} /><b className="mt-3 block">{type === 'Dine in' ? 'Dine at table' : 'Takeaway'}</b><span className="mt-1 block text-xs text-[#806b61]">{type === 'Dine in' ? 'Serve at your table' : 'Collect at the counter'}</span></button>)}</div><div className={`grid gap-4 ${orderType === 'Dine in' ? 'sm:grid-cols-[120px_1fr]' : ''}`}>{orderType === 'Dine in' && <label htmlFor="guest-table" className="block space-y-2 text-sm font-extrabold">Table no.<Input id="guest-table" value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/[^0-9A-Za-z-]/g, '').slice(0, 3))} placeholder="05" className="h-12 text-base" /></label>}<label htmlFor="guest-name" className="block space-y-2 text-sm font-extrabold">Your name<Input id="guest-name" value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="Name for the order" className="h-12 text-base" /></label></div><label htmlFor="guest-phone" className="block space-y-2 text-sm font-extrabold">Mobile number <span className="font-medium text-[#8b776d]">(optional)</span><Input id="guest-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} placeholder="For order updates" inputMode="tel" className="h-12 text-base" /></label><label htmlFor="guest-kitchen-note" className="block space-y-2 text-sm font-extrabold">Note for the kitchen <span className="font-medium text-[#8b776d]">(optional)</span><Textarea id="guest-kitchen-note" value={kitchenNotes} onChange={(event) => setKitchenNotes(event.target.value)} placeholder="Less spicy, no onion, allergy note…" className="min-h-20 text-base" /></label></div>;
+}
+
+function ReservationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [guests, setGuests] = useState(2);
+  const [bookingDate, setBookingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bookingTime, setBookingTime] = useState('19:30');
+  const [tableNumber, setTableNumber] = useState('01');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [confirmation, setConfirmation] = useState<BookingRecord | null>(null);
+  async function submit() {
+    setError(''); setSaving(true);
+    try {
+      const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, phone, guests, bookingDate, bookingTime, tableNumber: tableNumber.padStart(2, '0'), notes }) });
+      const data = (await response.json()) as { booking?: BookingRecord; error?: string };
+      if (!response.ok || !data.booking) throw new Error(data.error || 'Booking could not be saved');
+      setConfirmation(data.booking);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Booking could not be saved'); }
+    finally { setSaving(false); }
+  }
+  return <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) { setConfirmation(null); setError(''); } }}><DialogContent className="max-h-[92vh] overflow-y-auto rounded-[24px] sm:max-w-lg">{confirmation ? <div className="py-6 text-center"><span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-8" /></span><DialogTitle className="mt-5 font-serif text-3xl font-black">Table booked</DialogTitle><DialogDescription className="mt-2">Booking <b className="text-[#6a2116]">{confirmation.bookingNumber}</b> is confirmed for table {confirmation.tableNumber} on {confirmation.bookingDate} at {confirmation.bookingTime}.</DialogDescription><Button onClick={() => onOpenChange(false)} className="mt-6 bg-[#6a2116] hover:bg-[#521008]">Done</Button></div> : <><DialogHeader><DialogTitle className="font-serif text-2xl font-black">Reserve your table</DialogTitle><DialogDescription>Choose your date, time and preferred table. The restaurant will see this booking instantly.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Your name<Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Guest name" /></label><label className="space-y-2 text-sm font-extrabold">Mobile number<Input value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} inputMode="tel" /></label><label className="space-y-2 text-sm font-extrabold">Guests<div className="relative"><Users className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#8b776d]" /><Input type="number" min="1" max="20" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="pl-9" /></div></label><label className="space-y-2 text-sm font-extrabold">Date<Input type="date" min={new Date().toISOString().slice(0, 10)} value={bookingDate} onChange={(event) => setBookingDate(event.target.value)} /></label><label className="space-y-2 text-sm font-extrabold">Time<Input type="time" value={bookingTime} onChange={(event) => setBookingTime(event.target.value)} /></label><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Preferred table (01–16)<Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="01" /></label><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Special request <span className="font-medium text-[#8b776d]">(optional)</span><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Birthday, high chair, accessibility…" /></label>{error && <p className="text-sm font-bold text-red-700 sm:col-span-2">{error}</p>}<Button onClick={submit} disabled={saving || !customerName.trim() || !phone.trim() || !bookingDate || !bookingTime || !tableNumber} className="h-12 bg-[#6a2116] font-black hover:bg-[#521008] sm:col-span-2">{saving ? 'Booking…' : 'Confirm table booking'}</Button></div></>}</DialogContent></Dialog>;
 }
 
 function PaymentStep({ payment, setPayment, total }: { payment: (typeof paymentOptions)[number]['name']; setPayment: (value: (typeof paymentOptions)[number]['name']) => void; total: number }) {
