@@ -61,7 +61,11 @@ export function GuestMenu() {
     <main className="min-h-screen bg-[#f7f1e8] text-[#251a15]">
       <header className="sticky top-0 z-40 border-b border-[#eadfd3] bg-[#fffaf4]/95 backdrop-blur">
         <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <button onClick={() => { window.location.href = '/menu'; }} className="flex items-center gap-3 text-left"><span className="grid size-10 place-items-center rounded-2xl bg-[#6d2416] font-serif text-xl font-bold text-[#f6a622]">त</span><span><b className="block font-serif text-xl leading-none">Tripti</b><small className="text-[10px] font-bold uppercase tracking-[.16em] text-[#9b6c58]">The Indian Flavour</small></span></button>
+          <button aria-label="Tripti home" onClick={() => { window.location.href = '/menu'; }} className="flex items-center gap-3 text-left">
+            {/* oxlint-disable-next-line next/no-img-element */}
+            <img src="/tripti-logo.png" alt="" className="size-13 object-contain drop-shadow-sm" />
+            <span><b className="block font-serif text-xl leading-none">Tripti</b><small className="text-[10px] font-bold uppercase tracking-[.16em] text-[#9b6c58]">The Indian Flavour</small></span>
+          </button>
           <nav className="hidden items-center gap-7 text-sm font-bold md:flex"><a href="#menu">Menu</a><a href="#story">Our kitchen</a><a href="#visit">Visit</a></nav>
           <button onClick={() => { window.location.href = '/'; }} className="flex items-center gap-2 rounded-full border border-[#d9c8bb] px-3 py-2 text-sm font-bold transition hover:bg-white"><ArrowLeft className="size-4" /><span className="hidden sm:inline">Staff system</span></button>
         </div>

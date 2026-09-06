@@ -399,9 +399,9 @@ export function RestaurantSystem() {
 
 function Brand() {
   return (
-    <div className="mb-8 flex items-center gap-3 px-2">
-      <div className="grid size-11 place-items-center rounded-2xl bg-[#f6a622] text-[#48180f] shadow-[0_8px_24px_rgba(0,0,0,.18)]"><span className="font-serif text-2xl font-bold">त</span></div>
-      <div><p className="font-serif text-xl font-bold leading-none">Tripti</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-[.18em] text-orange-200/70">Indian Flavour</p></div>
+    <div className="mb-6 flex justify-center border-b border-white/10 px-2 pb-5">
+      {/* oxlint-disable-next-line next/no-img-element */}
+      <img src="/tripti-logo.png" alt="Tripti — The Indian Flavour" className="h-28 w-36 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,.28)]" />
     </div>
   );
 }

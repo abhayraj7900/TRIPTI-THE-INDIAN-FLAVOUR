@@ -8,6 +8,10 @@ const serif = Lora({ variable: '--font-tripti-serif', subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Tripti — Restaurant Management',
   description: 'Restaurant point of sale, billing, kitchen, tables, inventory and reports.',
+  icons: {
+    icon: '/tripti-logo.png',
+    apple: '/tripti-logo.png',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
