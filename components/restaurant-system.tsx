@@ -401,7 +401,7 @@ function Brand() {
   return (
     <div className="mb-6 flex justify-center border-b border-white/10 px-2 pb-5">
       {/* oxlint-disable-next-line next/no-img-element */}
-      <img src="/tripti-logo.png" alt="Tripti — The Indian Flavour" className="h-28 w-36 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,.28)]" />
+      <img src="/tripti-logo.png" alt="Tripti — The Indian Flavour" className="h-24 w-full object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,.28)]" />
     </div>
   );
 }
