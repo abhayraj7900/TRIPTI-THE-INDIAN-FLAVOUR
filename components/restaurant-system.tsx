@@ -54,6 +54,7 @@ import {
   demoInventory,
   demoOrders,
   menu,
+  type MenuItem,
   type OrderRecord,
   type StockItem,
 } from '@/lib/restaurant-data';
@@ -451,14 +452,20 @@ function POSView({ category, setCategory, query, setQuery, filtered, cart, cartI
 function MenuCard({ item, onAdd }: { item: (typeof menu)[number]; onAdd: () => void }) {
   return (
     <article className="group overflow-hidden rounded-[20px] border border-[#dfd9cf] bg-white shadow-[0_8px_30px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_38px_rgba(66,39,25,.11)]">
-      <div className={`relative h-24 bg-gradient-to-br ${item.tone}`}><div className="absolute inset-0 opacity-50 [background-image:radial-gradient(circle_at_30%_20%,white_0,transparent_22%),radial-gradient(circle_at_70%_70%,#7c2d12_0,transparent_3%)] [background-size:auto,22px_22px]" /><span className={`absolute left-3 top-3 grid size-5 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}><span className={`size-2 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`} /></span><span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#6d2416] shadow-sm">{item.category}</span></div>
+      <div className="relative h-32 overflow-hidden"><FoodThumb item={item} className="h-full w-full transition duration-500 group-hover:scale-105" /><span className={`absolute left-3 top-3 grid size-5 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}><span className={`size-2 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`} /></span><span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#6d2416] shadow-sm">{item.category}</span></div>
       <div className="p-4"><h3 className="font-serif text-lg font-bold">{item.name}</h3><p className="mt-1 min-h-10 text-sm leading-5 text-[#7a6960]">{item.note}</p><div className="mt-4 flex items-center justify-between"><span className="font-bold">{rupees.format(item.price)}</span><Button onClick={onAdd} size="sm" className="h-9 rounded-full bg-[#f6a622] px-4 text-[#48180f] hover:bg-[#e89a16]"><Plus /> Add</Button></div></div>
     </article>
   );
 }
 
 function CartRow({ item, quantity, onChange }: { item: (typeof menu)[number]; quantity: number; onChange: (id: number, amount: number) => void }) {
-  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4ded5] bg-white p-3"><div className={`size-12 shrink-0 rounded-xl bg-gradient-to-br ${item.tone}`} /><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7a6960]">{rupees.format(item.price)}</p></div><div className="flex items-center gap-2 rounded-full bg-[#f4eee7] p-1"><button onClick={() => onChange(item.id, -1)} className="grid size-7 place-items-center rounded-full bg-white shadow-sm" aria-label={`Remove one ${item.name}`}><Minus className="size-3" /></button><span className="min-w-4 text-center text-sm font-bold">{quantity}</span><button onClick={() => onChange(item.id, 1)} className="grid size-7 place-items-center rounded-full bg-[#6d2416] text-white" aria-label={`Add one ${item.name}`}><Plus className="size-3" /></button></div></div>;
+  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4ded5] bg-white p-3"><FoodThumb item={item} className="size-12 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7a6960]">{rupees.format(item.price)}</p></div><div className="flex items-center gap-2 rounded-full bg-[#f4eee7] p-1"><button onClick={() => onChange(item.id, -1)} className="grid size-7 place-items-center rounded-full bg-white shadow-sm" aria-label={`Remove one ${item.name}`}><Minus className="size-3" /></button><span className="min-w-4 text-center text-sm font-bold">{quantity}</span><button onClick={() => onChange(item.id, 1)} className="grid size-7 place-items-center rounded-full bg-[#6d2416] text-white" aria-label={`Add one ${item.name}`}><Plus className="size-3" /></button></div></div>;
+}
+
+function FoodThumb({ item, className }: { item: MenuItem; className: string }) {
+  const column = item.photo % 5;
+  const row = Math.floor(item.photo / 5);
+  return <div aria-hidden="true" className={`bg-no-repeat ${className}`} style={{ backgroundImage: "url('/tripti-food-atlas.png')", backgroundPosition: `${column * 25}% ${row * 25}%`, backgroundSize: '500% 500%' }} />;
 }
 
 function KitchenView({ orders, onAdvance }: { orders: OrderRecord[]; onAdvance: (order: OrderRecord) => void }) {
