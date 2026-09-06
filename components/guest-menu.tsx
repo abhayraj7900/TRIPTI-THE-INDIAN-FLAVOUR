@@ -137,7 +137,7 @@ export function GuestMenu() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((item) => (
                   <article key={item.id} className="group overflow-hidden rounded-[24px] border border-[#e1d7cd] bg-white shadow-[0_10px_35px_rgba(75,42,24,.07)] transition hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(75,42,24,.12)]">
-                    <div className="relative overflow-hidden"><FoodPhoto item={item} className="aspect-[4/3] w-full transition duration-500 group-hover:scale-[1.035]" /><span className="absolute left-3 top-3 rounded-full bg-white/95 p-1.5 shadow"><VegMark veg={item.veg} /></span>{item.badge && <span className="absolute bottom-3 left-3 rounded-full bg-[#f6a81b] px-3 py-1.5 text-xs font-black text-[#371008] shadow-sm">{item.badge}</span>}</div>
+                    <div className="relative overflow-hidden"><FoodPhoto item={item} className="h-28 w-full transition duration-500 group-hover:scale-[1.035]" /><span className="absolute left-3 top-3 rounded-full bg-white/95 p-1.5 shadow"><VegMark veg={item.veg} /></span>{item.badge && <span className="absolute bottom-3 left-3 rounded-full bg-[#f6a81b] px-3 py-1.5 text-xs font-black text-[#371008] shadow-sm">{item.badge}</span>}</div>
                     <div className="p-4"><h3 className="min-h-12 font-serif text-lg font-black leading-6">{item.name}</h3><p className="mt-1 min-h-10 text-sm leading-5 text-[#7d685e]">{item.note}</p><div className="mt-4 flex items-center justify-between gap-3"><span className="text-lg font-black">{rupees.format(item.price)}</span>{cart[item.id] ? <QuantityControl item={item} quantity={cart[item.id]} change={change} /> : <Button onClick={() => change(item.id, 1)} size="sm" className="rounded-full bg-[#f6a81b] px-4 font-black text-[#351008] hover:bg-[#e99a08]"><Plus /> Add</Button>}</div></div>
                   </article>
                 ))}
@@ -187,7 +187,7 @@ function CartBody({ cartItems, cart, change, subtotal, tax, total }: { cartItems
 }
 
 function CheckoutRow({ item, quantity, change }: { item: MenuItem; quantity: number; change: (id: number, amount: number) => void }) {
-  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4dad1] bg-white p-3"><FoodPhoto item={item} className="size-14 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{item.name}</p><p className="mt-0.5 text-sm text-[#7b655b]">{rupees.format(item.price)}</p></div><QuantityControl item={item} quantity={quantity} change={change} /></div>;
+  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4dad1] bg-white p-3"><FoodPhoto item={item} className="size-12 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{item.name}</p><p className="mt-0.5 text-sm text-[#7b655b]">{rupees.format(item.price)}</p></div><QuantityControl item={item} quantity={quantity} change={change} /></div>;
 }
 
 function OrderTotal({ subtotal, tax, total }: { subtotal: number; tax: number; total: number }) {
