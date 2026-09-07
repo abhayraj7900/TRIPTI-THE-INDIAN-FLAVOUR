@@ -1,5 +1,5 @@
 import { getD1Binding } from '@/db/d1';
-import { clearCustomerCookie, createCustomerCookie, normalizePhone, readCustomerSession } from '@/lib/auth';
+import { clearCustomerCookie, createCustomerCookie, createCustomerPin, normalizePhone, readCustomerSession, verifyCustomerPin } from '@/lib/auth';
 
 export async function GET(request: Request) {
   return Response.json({ customer: await readCustomerSession(request.headers.get('cookie')) });
@@ -7,15 +7,27 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const input = (await request.json()) as { name?: string; phone?: string };
+    const input = (await request.json()) as { name?: string; phone?: string; pin?: string };
     const name = input.name?.trim() ?? '';
     const phone = normalizePhone(input.phone ?? '');
-    if (name.length < 2 || phone.length < 8) return Response.json({ error: 'Enter your name and a valid mobile number' }, { status: 400 });
+    const pin = input.pin?.trim() ?? '';
+    if (name.length < 2 || phone.length < 8 || !/^\d{4,8}$/.test(pin)) return Response.json({ error: 'Enter your name, mobile number and a 4–8 digit PIN' }, { status: 400 });
     const now = Date.now();
-    await getD1Binding().prepare(
-      `INSERT INTO customer_profiles (phone, name, created_at, updated_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(phone) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
-    ).bind(phone, name, now, now).run();
+    const db = getD1Binding();
+    const existing = await db.prepare(
+      'SELECT name, pin_hash AS pinHash, pin_salt AS pinSalt FROM customer_profiles WHERE phone = ? LIMIT 1',
+    ).bind(phone).first<{ name: string; pinHash: string | null; pinSalt: string | null }>();
+    if (existing?.pinHash && existing.pinSalt && !await verifyCustomerPin(pin, existing.pinSalt, existing.pinHash)) {
+      return Response.json({ error: 'Incorrect customer PIN' }, { status: 401 });
+    }
+    const credentials = existing?.pinHash && existing.pinSalt
+      ? { pinHash: existing.pinHash, pinSalt: existing.pinSalt }
+      : await createCustomerPin(pin);
+    await db.prepare(
+      `INSERT INTO customer_profiles (phone, name, pin_hash, pin_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(phone) DO UPDATE SET name = excluded.name, pin_hash = excluded.pin_hash,
+         pin_salt = excluded.pin_salt, updated_at = excluded.updated_at`,
+    ).bind(phone, name, credentials.pinHash, credentials.pinSalt, now, now).run();
     const customer = { name, phone };
     return Response.json({ customer }, { headers: { 'Set-Cookie': await createCustomerCookie(customer) } });
   } catch (error) {

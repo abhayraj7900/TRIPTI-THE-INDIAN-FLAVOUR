@@ -26,6 +26,27 @@ async function signature(payload: string) {
   return toBase64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(payload))));
 }
 
+async function pinDigest(pin: string, salt: Uint8Array) {
+  const key = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const normalizedSalt = new Uint8Array(salt.byteLength);
+  normalizedSalt.set(salt);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: normalizedSalt, iterations: 120000 }, key, 256);
+  return toBase64Url(new Uint8Array(bits));
+}
+
+export async function createCustomerPin(pin: string) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return { pinHash: await pinDigest(pin, salt), pinSalt: toBase64Url(salt) };
+}
+
+export async function verifyCustomerPin(pin: string, pinSalt: string, expectedHash: string) {
+  const suppliedHash = await pinDigest(pin, fromBase64Url(pinSalt));
+  if (suppliedHash.length !== expectedHash.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < suppliedHash.length; index += 1) mismatch |= suppliedHash.charCodeAt(index) ^ expectedHash.charCodeAt(index);
+  return mismatch === 0;
+}
+
 export function normalizePhone(value: string) {
   return value.replace(/\D/g, '').slice(-15);
 }

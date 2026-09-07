@@ -105,6 +105,8 @@ export const siteSettings = sqliteTable('site_settings', {
 export const customerProfiles = sqliteTable('customer_profiles', {
   phone: text('phone').primaryKey(),
   name: text('name').notNull(),
+  pinHash: text('pin_hash'),
+  pinSalt: text('pin_salt'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
