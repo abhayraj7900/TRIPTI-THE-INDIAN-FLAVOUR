@@ -77,12 +77,16 @@ export async function readCustomerSession(cookieHeader: string | null): Promise<
   }
 }
 
-export function isStaffUserId(userId: string | null) {
+export function isStaffIdentity(userId: string | null, email: string | null) {
   if (process.env.NODE_ENV === 'development') return true;
-  const allowed = (env.STAFF_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
-  return Boolean(userId && allowed.includes(userId));
+  const allowedIds = (env.STAFF_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const allowedEmails = (env.STAFF_EMAILS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+  return Boolean((userId && allowedIds.includes(userId)) || (email && allowedEmails.includes(email.toLowerCase())));
 }
 
 export function isStaffRequest(request: Request) {
-  return isStaffUserId(request.headers.get('oai-authenticated-user-id'));
+  return isStaffIdentity(
+    request.headers.get('oai-authenticated-user-id'),
+    request.headers.get('oai-authenticated-user-email'),
+  );
 }

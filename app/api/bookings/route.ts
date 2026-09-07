@@ -37,7 +37,9 @@ export async function POST(request: Request) {
     const session = await readCustomerSession(request.headers.get('cookie'));
     const staff = isStaffRequest(request);
     if (!staff && !session) return Response.json({ error: 'Customer sign-in required for table booking' }, { status: 401 });
-    const customerName = session?.name ?? (staff ? input.customerName?.trim() : undefined);
+    const customerName = session
+      ? input.customerName?.trim() || session.name
+      : (staff ? input.customerName?.trim() : undefined);
     const phone = normalizePhone(session?.phone ?? (staff ? input.phone ?? '' : ''));
     const bookingDate = input.bookingDate?.trim();
     const bookingTime = input.bookingTime?.trim();

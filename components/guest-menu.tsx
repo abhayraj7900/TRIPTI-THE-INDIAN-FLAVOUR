@@ -118,9 +118,10 @@ export function GuestMenu() {
     <main className="min-h-screen bg-[#f5f1ea] pb-24 text-[#251713] xl:pb-0">
       <header className="sticky top-0 z-50 border-b border-[#e6ddd3] bg-[#fffdf9]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[74px] max-w-[1480px] items-center justify-between gap-3 px-4 sm:px-6">
-          <button aria-label="Tripti menu home" onClick={() => { window.location.href = '/menu'; }}>
+          <button aria-label="Tripti menu home" onClick={() => { window.location.href = '/menu'; }} className="flex items-center gap-3 text-left">
             {/* oxlint-disable-next-line next/no-img-element */}
-            <img src="/tripti-logo.png" alt="" className="h-12 w-32 object-contain sm:w-40" />
+            <img src="/tripti-logo.png" alt="" className="size-12 rounded-full object-contain" />
+            <span className="hidden leading-tight sm:block"><b className="block font-serif text-xl text-[#3d130d]">Tripti</b><span className="text-xs font-bold uppercase tracking-[.16em] text-[#9b6a32]">The Indian Flavour</span></span>
           </button>
           <div className="flex items-center gap-2">
             <button onClick={() => { window.location.href = '/account'; }} className="flex items-center gap-2 rounded-full border border-[#ded3c8] bg-white px-3 py-2 text-sm font-extrabold text-[#6a2116] sm:px-4"><CalendarDays className="size-4" /><span className="hidden sm:inline">Book a table</span></button>

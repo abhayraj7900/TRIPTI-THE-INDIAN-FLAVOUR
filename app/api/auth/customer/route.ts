@@ -7,11 +7,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const input = (await request.json()) as { name?: string; phone?: string; pin?: string };
-    const name = input.name?.trim() ?? '';
+    const input = (await request.json()) as { phone?: string; pin?: string };
     const phone = normalizePhone(input.phone ?? '');
     const pin = input.pin?.trim() ?? '';
-    if (name.length < 2 || phone.length < 8 || !/^\d{4,8}$/.test(pin)) return Response.json({ error: 'Enter your name, mobile number and a 4–8 digit PIN' }, { status: 400 });
+    if (phone.length < 8 || !/^\d{6}$/.test(pin)) return Response.json({ error: 'Enter a valid mobile number and exactly 6 digit PIN' }, { status: 400 });
     const now = Date.now();
     const db = getD1Binding();
     const existing = await db.prepare(
@@ -20,12 +19,13 @@ export async function POST(request: Request) {
     if (existing?.pinHash && existing.pinSalt && !await verifyCustomerPin(pin, existing.pinSalt, existing.pinHash)) {
       return Response.json({ error: 'Incorrect customer PIN' }, { status: 401 });
     }
+    const name = existing?.name || `Customer ${phone.slice(-4)}`;
     const credentials = existing?.pinHash && existing.pinSalt
       ? { pinHash: existing.pinHash, pinSalt: existing.pinSalt }
       : await createCustomerPin(pin);
     await db.prepare(
       `INSERT INTO customer_profiles (phone, name, pin_hash, pin_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(phone) DO UPDATE SET name = excluded.name, pin_hash = excluded.pin_hash,
+       ON CONFLICT(phone) DO UPDATE SET pin_hash = excluded.pin_hash,
          pin_salt = excluded.pin_salt, updated_at = excluded.updated_at`,
     ).bind(phone, name, credentials.pinHash, credentials.pinSalt, now, now).run();
     const customer = { name, phone };
