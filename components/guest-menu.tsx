@@ -4,6 +4,7 @@ import { ArrowLeft, Banknote, CalendarDays, Check, ChevronRight, Clock3, CreditC
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { DishPhoto } from '@/components/dish-photo';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,13 +19,6 @@ const paymentOptions = [
 
 function localOrderNumber() {
   return `TRP-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-}
-
-function FoodPhoto({ item, className = '' }: { item: MenuItem; className?: string }) {
-  if (item.photoUrl) return <div aria-hidden="true" className={`bg-cover bg-center ${className}`} style={{ backgroundImage: `url('${item.photoUrl}')` }} />;
-  const column = item.photo % 5;
-  const row = Math.floor(item.photo / 5);
-  return <div aria-hidden="true" className={`bg-no-repeat ${className}`} style={{ backgroundImage: "url('/tripti-food-atlas.png')", backgroundPosition: `${column * 25}% ${row * 25}%`, backgroundSize: '500% 500%' }} />;
 }
 
 function VegMark({ veg }: { veg: boolean }) {
@@ -163,7 +157,7 @@ export function GuestMenu() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((item) => (
                   <article key={item.id} className="group overflow-hidden rounded-[24px] border border-[#e1d7cd] bg-white shadow-[0_10px_35px_rgba(75,42,24,.07)] transition hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(75,42,24,.12)]">
-                    <div className="relative overflow-hidden"><FoodPhoto item={item} className="aspect-[4/3] w-full transition duration-500 group-hover:scale-[1.035]" /><span className="absolute left-3 top-3 rounded-full bg-white/95 p-1.5 shadow"><VegMark veg={item.veg} /></span>{item.badge && <span className="absolute bottom-3 left-3 rounded-full bg-[#f6a81b] px-3 py-1.5 text-xs font-black text-[#371008] shadow-sm">{item.badge}</span>}</div>
+                    <div className="relative overflow-hidden"><DishPhoto item={item} className="aspect-[4/3] w-full transition duration-500 group-hover:scale-[1.035]" /><span className="absolute left-3 top-3 rounded-full bg-white/95 p-1.5 shadow"><VegMark veg={item.veg} /></span>{item.badge && <span className="absolute bottom-3 left-3 rounded-full bg-[#f6a81b] px-3 py-1.5 text-xs font-black text-[#371008] shadow-sm">{item.badge}</span>}</div>
                     <div className="p-3"><h3 className="line-clamp-2 min-h-10 font-serif text-base font-black leading-5">{item.name}</h3><p className="mt-1 truncate text-[13px] leading-4 text-[#7d685e]">{item.note}</p><div className="mt-3 flex items-center justify-between gap-3"><span className="font-black">{rupees.format(item.price)}</span>{cart[item.id] ? <QuantityControl item={item} quantity={cart[item.id]} change={change} /> : <Button onClick={() => change(item.id, 1)} size="sm" className="rounded-full bg-[#f6a81b] px-4 font-black text-[#351008] hover:bg-[#e99a08]"><Plus /> Add</Button>}</div></div>
                   </article>
                 ))}
@@ -213,7 +207,7 @@ function CartBody({ cartItems, cart, change, subtotal, tax, total }: { cartItems
 }
 
 function CheckoutRow({ item, quantity, change }: { item: MenuItem; quantity: number; change: (id: number, amount: number) => void }) {
-  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4dad1] bg-white p-3"><FoodPhoto item={item} className="size-12 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{item.name}</p><p className="mt-0.5 text-sm text-[#7b655b]">{rupees.format(item.price)}</p></div><QuantityControl item={item} quantity={quantity} change={change} /></div>;
+  return <div className="flex items-center gap-3 rounded-2xl border border-[#e4dad1] bg-white p-3"><DishPhoto item={item} className="size-12 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{item.name}</p><p className="mt-0.5 text-sm text-[#7b655b]">{rupees.format(item.price)}</p></div><QuantityControl item={item} quantity={quantity} change={change} /></div>;
 }
 
 function OrderTotal({ subtotal, tax, total }: { subtotal: number; tax: number; total: number }) {
