@@ -1,4 +1,5 @@
 import { getD1Binding } from '@/db/d1';
+import { isStaffRequest, normalizePhone, readCustomerSession } from '@/lib/auth';
 
 type BookingInput = {
   id?: string;
@@ -14,8 +15,9 @@ type BookingInput = {
 
 const allowedStatuses = ['booked', 'completed', 'cancelled'];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const db = getD1Binding();
     const { results } = await db.prepare(
       `SELECT id, booking_number AS bookingNumber, customer_name AS customerName,
@@ -32,8 +34,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const input = (await request.json()) as BookingInput;
-    const customerName = input.customerName?.trim();
-    const phone = input.phone?.trim();
+    const session = await readCustomerSession(request.headers.get('cookie'));
+    const staff = isStaffRequest(request);
+    if (!staff && !session) return Response.json({ error: 'Customer sign-in required for table booking' }, { status: 401 });
+    const customerName = session?.name ?? (staff ? input.customerName?.trim() : undefined);
+    const phone = normalizePhone(session?.phone ?? (staff ? input.phone ?? '' : ''));
     const bookingDate = input.bookingDate?.trim();
     const bookingTime = input.bookingTime?.trim();
     const tableNumber = input.tableNumber?.trim().padStart(2, '0');
@@ -72,6 +77,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as BookingInput;
     if (!input.id || !input.status || !allowedStatuses.includes(input.status)) {
       return Response.json({ error: 'Invalid booking update' }, { status: 400 });

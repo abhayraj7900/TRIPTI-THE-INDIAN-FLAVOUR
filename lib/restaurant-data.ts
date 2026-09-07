@@ -6,6 +6,8 @@ export type MenuItem = {
   category: string;
   veg: boolean;
   photo: number;
+  photoUrl?: string | null;
+  active?: boolean;
   badge?: string;
 };
 
@@ -156,6 +158,10 @@ export type OrderRecord = {
   orderType: string;
   tableNumber: string | null;
   customerName: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
   status: string;
   paymentStatus: string;
   paymentMethod: string | null;
@@ -181,6 +187,32 @@ export type BookingRecord = {
   status: 'booked' | 'completed' | 'cancelled';
   createdAt: number;
   updatedAt: number;
+};
+
+export type CustomerSettings = {
+  offerEnabled: boolean;
+  offerTitle: string;
+  offerText: string;
+  bannerImageUrl: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  youtubeUrl: string;
+  whatsappNumber: string;
+  restaurantAddress: string;
+  googleMapsUrl: string;
+};
+
+export const defaultCustomerSettings: CustomerSettings = {
+  offerEnabled: false,
+  offerTitle: 'Today’s special',
+  offerText: 'Fresh flavours, made to order.',
+  bannerImageUrl: '',
+  instagramUrl: '',
+  facebookUrl: '',
+  youtubeUrl: '',
+  whatsappNumber: '',
+  restaurantAddress: 'Connaught Place, New Delhi',
+  googleMapsUrl: '',
 };
 
 const now = Date.now();

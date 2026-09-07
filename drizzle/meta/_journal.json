@@ -15,6 +15,13 @@
       "when": 1788736162806,
       "tag": "0001_past_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788740600276,
+      "tag": "0002_sour_gertrude_yorkes",
+      "breakpoints": true
     }
   ]
 }

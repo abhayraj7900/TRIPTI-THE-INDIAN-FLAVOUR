@@ -8,6 +8,10 @@ export const orders = sqliteTable(
     orderType: text('order_type').notNull(),
     tableNumber: text('table_number'),
     customerName: text('customer_name'),
+    customerPhone: text('customer_phone'),
+    deliveryAddress: text('delivery_address'),
+    latitude: text('latitude'),
+    longitude: text('longitude'),
     status: text('status').notNull().default('new'),
     paymentStatus: text('payment_status').notNull().default('pending'),
     paymentMethod: text('payment_method'),
@@ -22,6 +26,7 @@ export const orders = sqliteTable(
   (table) => [
     index('idx_orders_status_created_at').on(table.status, table.createdAt),
     index('idx_orders_payment_status').on(table.paymentStatus),
+    index('idx_orders_customer_phone').on(table.customerPhone, table.createdAt),
   ],
 );
 
@@ -68,8 +73,41 @@ export const tableBookings = sqliteTable(
   (table) => [
     index('idx_bookings_status_date').on(table.status, table.bookingDate),
     index('idx_bookings_table_slot').on(table.tableNumber, table.bookingDate, table.bookingTime),
+    index('idx_bookings_phone').on(table.phone, table.createdAt),
   ],
 );
+
+export const menuItems = sqliteTable(
+  'menu_items',
+  {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    note: text('note').notNull(),
+    price: integer('price').notNull(),
+    category: text('category').notNull(),
+    veg: integer('veg', { mode: 'boolean' }).notNull().default(true),
+    photo: integer('photo').notNull().default(0),
+    photoUrl: text('photo_url'),
+    badge: text('badge'),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [index('idx_menu_items_active_category').on(table.active, table.category)],
+);
+
+export const siteSettings = sqliteTable('site_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const customerProfiles = sqliteTable('customer_profiles', {
+  phone: text('phone').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
 
 export type Order = typeof orders.$inferSelect;
 export type InventoryItem = typeof inventory.$inferSelect;

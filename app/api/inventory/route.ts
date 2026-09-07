@@ -1,7 +1,9 @@
 import { getD1Binding } from '@/db/d1';
+import { isStaffRequest } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const { results } = await getD1Binding()
       .prepare('SELECT id, name, category, unit, quantity, reorder_at AS reorderAt, updated_at AS updatedAt FROM inventory ORDER BY name')
       .all();
@@ -13,6 +15,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as { id?: string; name?: string; category?: string; unit?: string; quantity?: number; reorderAt?: number };
     if (!input.id || !input.name || !input.category || !input.unit || !Number.isFinite(input.quantity) || !Number.isFinite(input.reorderAt)) {
       return Response.json({ error: 'Invalid inventory item' }, { status: 400 });

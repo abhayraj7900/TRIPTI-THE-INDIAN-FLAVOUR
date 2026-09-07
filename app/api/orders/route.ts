@@ -1,4 +1,5 @@
 import { getD1Binding } from '@/db/d1';
+import { isStaffRequest, normalizePhone } from '@/lib/auth';
 
 type OrderItemInput = {
   menuItemId: number;
@@ -12,6 +13,10 @@ type OrderUpdateInput = {
   orderType?: string;
   tableNumber?: string | null;
   customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
   status?: string;
   paymentStatus?: string;
   paymentMethod?: string | null;
@@ -37,13 +42,15 @@ function totals(items: OrderItemInput[], requestedDiscount = 0) {
   return { subtotal, tax, discount, total: subtotal + tax - discount };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const db = getD1Binding();
     const [{ results: orderRows }, { results: itemRows }] = await db.batch([
       db.prepare(
         `SELECT id, order_number AS orderNumber, order_type AS orderType,
-          table_number AS tableNumber, customer_name AS customerName,
+          table_number AS tableNumber, customer_name AS customerName, customer_phone AS customerPhone,
+          delivery_address AS deliveryAddress, latitude, longitude,
           status, payment_status AS paymentStatus, payment_method AS paymentMethod,
           notes, subtotal, tax, discount, total, created_at AS createdAt
         FROM orders ORDER BY created_at DESC LIMIT 100`,
@@ -86,20 +93,26 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const orderNumber = `TRP-${String(now).slice(-6)}`;
     const paymentMethod = input.paymentMethod?.trim() || null;
+    const customerPhone = normalizePhone(input.customerPhone ?? '') || null;
     const db = getD1Binding();
 
     await db.batch([
       db.prepare(
         `INSERT INTO orders (
-          id, order_number, order_type, table_number, customer_name, status,
-          payment_status, payment_method, notes, subtotal, tax, discount, total, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, order_number, order_type, table_number, customer_name, customer_phone,
+          delivery_address, latitude, longitude, status, payment_status, payment_method,
+          notes, subtotal, tax, discount, total, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         id,
         orderNumber,
         input.orderType,
         input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
         input.customerName?.trim() || null,
+        customerPhone,
+        input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+        input.latitude?.trim() || null,
+        input.longitude?.trim() || null,
         'new',
         paymentMethod ? 'paid' : 'pending',
         paymentMethod,
@@ -125,6 +138,10 @@ export async function POST(request: Request) {
         orderType: input.orderType,
         tableNumber: input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
         customerName: input.customerName?.trim() || null,
+        customerPhone,
+        deliveryAddress: input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+        latitude: input.latitude?.trim() || null,
+        longitude: input.longitude?.trim() || null,
         status: 'new',
         paymentStatus: paymentMethod ? 'paid' : 'pending',
         paymentMethod,
@@ -141,6 +158,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as OrderUpdateInput;
     if (!input.id) return Response.json({ error: 'Order id is required' }, { status: 400 });
     const db = getD1Binding();
@@ -154,13 +172,18 @@ export async function PATCH(request: Request) {
       const now = Date.now();
       const statements = [
         db.prepare(
-          `UPDATE orders SET order_type = ?, table_number = ?, customer_name = ?, status = ?,
-            payment_status = ?, payment_method = ?, notes = ?, subtotal = ?, tax = ?, discount = ?,
-            total = ?, updated_at = ? WHERE id = ?`,
+          `UPDATE orders SET order_type = ?, table_number = ?, customer_name = ?, customer_phone = ?,
+            delivery_address = ?, latitude = ?, longitude = ?, status = ?, payment_status = ?,
+            payment_method = ?, notes = ?, subtotal = ?, tax = ?, discount = ?, total = ?,
+            updated_at = ? WHERE id = ?`,
         ).bind(
           input.orderType,
           input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
           input.customerName?.trim() || null,
+          normalizePhone(input.customerPhone ?? '') || null,
+          input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+          input.latitude?.trim() || null,
+          input.longitude?.trim() || null,
           input.status,
           input.paymentStatus,
           input.paymentMethod?.trim() || null,
@@ -188,6 +211,10 @@ export async function PATCH(request: Request) {
           orderType: input.orderType,
           tableNumber: input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
           customerName: input.customerName?.trim() || null,
+          customerPhone: normalizePhone(input.customerPhone ?? '') || null,
+          deliveryAddress: input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+          latitude: input.latitude?.trim() || null,
+          longitude: input.longitude?.trim() || null,
           status: input.status,
           paymentStatus: input.paymentStatus,
           paymentMethod: input.paymentMethod?.trim() || null,
@@ -213,6 +240,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as { id?: string };
     if (!input.id) return Response.json({ error: 'Order id is required' }, { status: 400 });
     const db = getD1Binding();

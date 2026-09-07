@@ -1,13 +1,13 @@
 'use client';
 
-import { ArrowLeft, Banknote, CalendarDays, Check, ChevronRight, Clock3, CreditCard, Minus, Plus, ReceiptText, Search, ShieldCheck, ShoppingBag, Smartphone, Sparkles, Users, UtensilsCrossed } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowLeft, Banknote, CalendarDays, Check, ChevronRight, Clock3, CreditCard, LocateFixed, MapPin, MessageCircle, Minus, Plus, ReceiptText, Search, ShieldCheck, ShoppingBag, Smartphone, Sparkles, UserRound, UtensilsCrossed } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { categories, menu, type BookingRecord, type MenuItem } from '@/lib/restaurant-data';
+import { defaultCustomerSettings, menu, type CustomerSettings, type MenuItem } from '@/lib/restaurant-data';
 
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 const paymentOptions = [
@@ -21,6 +21,7 @@ function localOrderNumber() {
 }
 
 function FoodPhoto({ item, className = '' }: { item: MenuItem; className?: string }) {
+  if (item.photoUrl) return <div aria-hidden="true" className={`bg-cover bg-center ${className}`} style={{ backgroundImage: `url('${item.photoUrl}')` }} />;
   const column = item.photo % 5;
   const row = Math.floor(item.photo / 5);
   return <div aria-hidden="true" className={`bg-no-repeat ${className}`} style={{ backgroundImage: "url('/tripti-food-atlas.png')", backgroundPosition: `${column * 25}% ${row * 25}%`, backgroundSize: '500% 500%' }} />;
@@ -34,25 +35,35 @@ export function GuestMenu() {
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
   const [vegOnly, setVegOnly] = useState(false);
+  const [catalog, setCatalog] = useState<MenuItem[]>(menu);
+  const [settings, setSettings] = useState<CustomerSettings>(defaultCustomerSettings);
   const [cart, setCart] = useState<Record<number, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState(0);
-  const [orderType, setOrderType] = useState<'Dine in' | 'Takeaway'>('Dine in');
+  const [orderType, setOrderType] = useState<'Dine in' | 'Takeaway' | 'Delivery'>('Dine in');
   const [tableNumber, setTableNumber] = useState('05');
   const [guest, setGuest] = useState('');
   const [phone, setPhone] = useState('');
   const [kitchenNotes, setKitchenNotes] = useState('');
-  const [reservationOpen, setReservationOpen] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [payment, setPayment] = useState<(typeof paymentOptions)[number]['name']>('Pay at counter');
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState('');
 
-  const cartItems = useMemo(() => menu.filter((item) => cart[item.id]), [cart]);
+  useEffect(() => {
+    fetch('/api/menu').then(async (response) => response.ok ? await response.json() as { items?: MenuItem[] } : null).then((data) => { if (data?.items?.length) setCatalog(data.items); }).catch(() => undefined);
+    fetch('/api/settings').then(async (response) => response.ok ? await response.json() as { settings?: CustomerSettings } : null).then((data) => { if (data?.settings) setSettings(data.settings); }).catch(() => undefined);
+  }, []);
+
+  const cartItems = useMemo(() => catalog.filter((item) => cart[item.id]), [cart, catalog]);
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * cart[item.id], 0);
   const tax = Math.round(subtotal * 0.05);
   const total = subtotal + tax;
   const count = cartItems.reduce((sum, item) => sum + cart[item.id], 0);
-  const filtered = menu.filter((item) => {
+  const menuCategories = useMemo(() => ['All', ...new Set(catalog.map((item) => item.category))], [catalog]);
+  const filtered = catalog.filter((item) => {
     const matchesCategory = category === 'All' || item.category === category;
     const matchesSearch = `${item.name} ${item.note}`.toLowerCase().includes(query.trim().toLowerCase());
     return matchesCategory && matchesSearch && (!vegOnly || item.veg);
@@ -75,12 +86,16 @@ export function GuestMenu() {
   }
 
   async function placeOrder() {
-    if (!cartItems.length || !guest.trim() || (orderType === 'Dine in' && !tableNumber.trim())) return;
+    if (!cartItems.length || !guest.trim() || phone.replace(/\D/g, '').length < 8 || (orderType === 'Dine in' && !tableNumber.trim()) || (orderType === 'Delivery' && !deliveryAddress.trim())) return;
     setSaving(true);
     const payload = {
       orderType,
       tableNumber: orderType === 'Dine in' ? tableNumber.trim() : undefined,
-      customerName: phone.trim() ? `${guest.trim()} · ${phone.trim()}` : guest.trim(),
+      customerName: guest.trim(),
+      customerPhone: phone.trim(),
+      deliveryAddress: orderType === 'Delivery' ? deliveryAddress.trim() : undefined,
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
       notes: kitchenNotes.trim() || undefined,
       items: cartItems.map((item) => ({ menuItemId: item.id, name: item.name, quantity: cart[item.id], unitPrice: item.price })),
     };
@@ -108,9 +123,10 @@ export function GuestMenu() {
             <img src="/tripti-logo.png" alt="" className="h-12 w-32 object-contain sm:w-40" />
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={() => setReservationOpen(true)} className="flex items-center gap-2 rounded-full border border-[#ded3c8] bg-white px-3 py-2 text-sm font-extrabold text-[#6a2116] sm:px-4"><CalendarDays className="size-4" /><span className="hidden sm:inline">Book a table</span></button>
+            <button onClick={() => { window.location.href = '/account'; }} className="flex items-center gap-2 rounded-full border border-[#ded3c8] bg-white px-3 py-2 text-sm font-extrabold text-[#6a2116] sm:px-4"><CalendarDays className="size-4" /><span className="hidden sm:inline">Book a table</span></button>
             <button onClick={() => { setOrderType('Dine in'); openCheckout(); }} className="hidden items-center gap-2 rounded-full bg-[#f4e9dc] px-4 py-2 text-sm font-extrabold text-[#6a2116] sm:flex"><UtensilsCrossed className="size-4" /> Table {tableNumber || '—'}</button>
             <button onClick={openCheckout} className="relative grid size-11 place-items-center rounded-full bg-[#6a2116] text-white shadow-sm" aria-label={`Open cart with ${count} items`}><ShoppingBag className="size-5" />{count > 0 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-[#f6a81b] text-[11px] font-black text-[#351008]">{count}</span>}</button>
+            <button onClick={() => { window.location.href = '/account'; }} className="grid size-11 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d]" aria-label="Customer account"><UserRound className="size-5" /></button>
             <button onClick={() => { window.location.href = '/'; }} className="grid size-11 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d]" aria-label="Open staff system"><ArrowLeft className="size-5" /></button>
           </div>
         </div>
@@ -122,9 +138,12 @@ export function GuestMenu() {
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setOrderType('Dine in')} className={`rounded-full px-5 py-3 text-sm font-extrabold transition ${orderType === 'Dine in' ? 'bg-[#f6a81b] text-[#351008]' : 'bg-white/10 text-white hover:bg-white/15'}`}>Dine at table</button>
             <button onClick={() => setOrderType('Takeaway')} className={`rounded-full px-5 py-3 text-sm font-extrabold transition ${orderType === 'Takeaway' ? 'bg-[#f6a81b] text-[#351008]' : 'bg-white/10 text-white hover:bg-white/15'}`}>Takeaway</button>
+            <button onClick={() => setOrderType('Delivery')} className={`rounded-full px-5 py-3 text-sm font-extrabold transition ${orderType === 'Delivery' ? 'bg-[#f6a81b] text-[#351008]' : 'bg-white/10 text-white hover:bg-white/15'}`}>Delivery</button>
           </div>
         </div>
       </section>
+
+      {settings.offerEnabled && <section className="border-b border-[#e4d6ca] bg-[#fff7e8]"><div className="mx-auto flex max-w-[1480px] items-center gap-5 px-4 py-4 sm:px-6">{settings.bannerImageUrl && <div className="hidden h-20 w-32 shrink-0 rounded-2xl bg-cover bg-center sm:block" style={{ backgroundImage: `url('${settings.bannerImageUrl}')` }} />}<div><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a4d16]">Special offer</p><h2 className="font-serif text-xl font-black">{settings.offerTitle}</h2><p className="mt-1 text-sm text-[#74594c]">{settings.offerText}</p></div><Sparkles className="ml-auto hidden size-8 text-[#d18413] sm:block" /></div></section>}
 
       <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6">
         <div className="mb-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -133,7 +152,7 @@ export function GuestMenu() {
         </div>
 
         <div className="mb-7 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
-          {categories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`shrink-0 rounded-full border px-4 py-2.5 text-sm font-extrabold transition ${category === name ? 'border-[#6a2116] bg-[#6a2116] text-white shadow-sm' : 'border-[#ded3c8] bg-white text-[#665148] hover:border-[#ad8d7f]'}`}>{name}</button>)}
+          {menuCategories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`shrink-0 rounded-full border px-4 py-2.5 text-sm font-extrabold transition ${category === name ? 'border-[#6a2116] bg-[#6a2116] text-white shadow-sm' : 'border-[#ded3c8] bg-white text-[#665148] hover:border-[#ad8d7f]'}`}>{name}</button>)}
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
@@ -152,7 +171,7 @@ export function GuestMenu() {
           </section>
 
           <aside className="sticky top-[98px] hidden h-fit overflow-hidden rounded-[28px] border border-[#ded3c8] bg-white shadow-[0_18px_55px_rgba(58,32,18,.1)] xl:block">
-            <div className="bg-[#45150e] p-5 text-white"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#ffc768]">Your order</p><h2 className="mt-1 font-serif text-2xl font-black">{orderType === 'Dine in' ? `Table ${tableNumber || '—'}` : 'Takeaway'}</h2></div><span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black">{count} items</span></div></div>
+            <div className="bg-[#45150e] p-5 text-white"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-[#ffc768]">Your order</p><h2 className="mt-1 font-serif text-2xl font-black">{orderType === 'Dine in' ? `Table ${tableNumber || '—'}` : orderType}</h2></div><span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black">{count} items</span></div></div>
             <CartBody cartItems={cartItems} cart={cart} change={change} subtotal={subtotal} tax={tax} total={total} />
             <div className="p-5 pt-0"><Button onClick={openCheckout} disabled={!cartItems.length} className="h-13 w-full rounded-2xl bg-[#f6a81b] text-base font-black text-[#351008] hover:bg-[#e99a08]">Review & checkout <ChevronRight /></Button><p className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-[#887269]"><ShieldCheck className="size-4" /> Order goes directly to the kitchen</p></div>
           </aside>
@@ -161,26 +180,25 @@ export function GuestMenu() {
 
       {count > 0 && <button onClick={openCheckout} className="fixed inset-x-3 bottom-3 z-40 flex h-16 items-center justify-between rounded-2xl bg-[#6a2116] px-5 font-extrabold text-white shadow-2xl xl:hidden"><span className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-full bg-white/10"><ShoppingBag className="size-5" /></span>{count} items</span><span>{rupees.format(total)} <ChevronRight className="ml-1 inline size-4" /></span></button>}
 
-      <footer className="border-t border-[#ded3c8] bg-white px-4 py-8 sm:px-6"><div className="mx-auto flex max-w-[1480px] flex-col justify-between gap-3 text-sm text-[#755f55] sm:flex-row sm:items-center"><span className="font-bold text-[#38130e]">Tripti — The Indian Flavour</span><span>Freshly prepared · Kitchen open daily</span></div></footer>
+      <footer className="border-t border-[#ded3c8] bg-white px-4 py-8 sm:px-6"><div className="mx-auto flex max-w-[1480px] flex-col justify-between gap-5 text-sm text-[#755f55] sm:flex-row sm:items-center"><div><span className="font-bold text-[#38130e]">Tripti — The Indian Flavour</span><p className="mt-1 flex items-center gap-2"><MapPin className="size-4" />{settings.restaurantAddress || 'Connaught Place, New Delhi'}</p></div><div className="flex flex-wrap items-center gap-2"><a href="/track" className="rounded-full border border-[#ded3c8] px-3 py-2 font-bold text-[#6a2116]">Track order</a><a href="/account" className="rounded-full border border-[#ded3c8] px-3 py-2 font-bold text-[#6a2116]">My account</a>{settings.instagramUrl && <a href={settings.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram" className="grid size-9 place-items-center rounded-full bg-[#f4ebe4] text-xs font-black">IG</a>}{settings.facebookUrl && <a href={settings.facebookUrl} target="_blank" rel="noreferrer" aria-label="Facebook" className="grid size-9 place-items-center rounded-full bg-[#f4ebe4] text-base font-black">f</a>}{settings.youtubeUrl && <a href={settings.youtubeUrl} target="_blank" rel="noreferrer" aria-label="YouTube" className="grid size-9 place-items-center rounded-full bg-[#f4ebe4] text-xs font-black">YT</a>}{settings.whatsappNumber && <a href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="grid size-9 place-items-center rounded-full bg-[#f4ebe4]"><MessageCircle className="size-4" /></a>}{settings.googleMapsUrl && <a href={settings.googleMapsUrl} target="_blank" rel="noreferrer" aria-label="Location" className="grid size-9 place-items-center rounded-full bg-[#f4ebe4]"><MapPin className="size-4" /></a>}</div></div></footer>
 
       <Dialog open={checkoutOpen} onOpenChange={(open) => { setCheckoutOpen(open); if (!open) { setCheckoutStep(0); setConfirmation(''); } }}>
         <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[28px] p-0 sm:max-w-xl">
           {checkoutStep === 3 ? (
-            <div className="px-6 py-10 text-center sm:px-10"><span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-8" /></span><DialogTitle className="mt-5 font-serif text-3xl font-black">Order sent to kitchen</DialogTitle><DialogDescription className="mt-3 text-base leading-6">Your order number is <b className="text-[#45150e]">{confirmation}</b>. {orderType === 'Dine in' ? `We’ll serve it at table ${tableNumber}.` : 'We’ll call you when it is ready.'}</DialogDescription><div className="mx-auto mt-6 max-w-sm rounded-2xl bg-[#f5efe8] p-4 text-left text-sm"><div className="flex justify-between"><span>Payment preference</span><b>{payment}</b></div><div className="mt-2 flex justify-between"><span>Status</span><b className="text-amber-700">Pay on service</b></div></div><Button onClick={() => setCheckoutOpen(false)} className="mt-7 h-12 rounded-full bg-[#6a2116] px-8 font-black hover:bg-[#521008]">Back to menu</Button></div>
+            <div className="px-6 py-10 text-center sm:px-10"><span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-8" /></span><DialogTitle className="mt-5 font-serif text-3xl font-black">Order sent to kitchen</DialogTitle><DialogDescription className="mt-3 text-base leading-6">Your order number is <b className="text-[#45150e]">{confirmation}</b>. {orderType === 'Dine in' ? `We’ll serve it at table ${tableNumber}.` : orderType === 'Delivery' ? 'The kitchen will prepare it for delivery.' : 'We’ll call you when it is ready.'}</DialogDescription><div className="mx-auto mt-6 max-w-sm rounded-2xl bg-[#f5efe8] p-4 text-left text-sm"><div className="flex justify-between"><span>Payment preference</span><b>{payment}</b></div><div className="mt-2 flex justify-between"><span>Status</span><b className="text-amber-700">Order received</b></div></div><div className="mt-7 flex flex-col justify-center gap-2 sm:flex-row"><a href={`/track?order=${encodeURIComponent(confirmation)}&phone=${encodeURIComponent(phone)}`} className="inline-flex h-12 items-center justify-center rounded-full bg-[#f6a81b] px-7 font-black text-[#351008]">Track order</a><Button onClick={() => setCheckoutOpen(false)} variant="outline" className="h-12 rounded-full px-7 font-black">Back to menu</Button></div></div>
           ) : (
             <>
               <div className="bg-[#45150e] px-6 py-6 text-white sm:px-8"><DialogHeader><DialogTitle className="font-serif text-2xl font-black">Complete your order</DialogTitle><DialogDescription className="text-orange-50/65">Review, add table details and choose payment.</DialogDescription></DialogHeader><div className="mt-5 grid grid-cols-3 gap-2">{['Basket', 'Details', 'Payment'].map((label, index) => <div key={label} className={`rounded-xl px-2 py-2 text-center text-xs font-extrabold ${checkoutStep === index ? 'bg-[#f6a81b] text-[#351008]' : checkoutStep > index ? 'bg-emerald-700 text-white' : 'bg-white/10 text-white/65'}`}>{checkoutStep > index ? '✓ ' : `${index + 1}. `}{label}</div>)}</div></div>
               <div className="p-6 sm:p-8">
                 {checkoutStep === 0 && <div><div className="mb-4 flex items-center justify-between"><h3 className="font-serif text-xl font-black">Your basket</h3><span className="text-sm font-bold text-[#806b61]">{count} items</span></div><div className="max-h-72 space-y-3 overflow-y-auto pr-1">{cartItems.map((item) => <CheckoutRow key={item.id} item={item} quantity={cart[item.id]} change={change} />)}</div><OrderTotal subtotal={subtotal} tax={tax} total={total} /></div>}
-                {checkoutStep === 1 && <DetailsStep orderType={orderType} setOrderType={setOrderType} tableNumber={tableNumber} setTableNumber={setTableNumber} guest={guest} setGuest={setGuest} phone={phone} setPhone={setPhone} kitchenNotes={kitchenNotes} setKitchenNotes={setKitchenNotes} />}
+                {checkoutStep === 1 && <DetailsStep orderType={orderType} setOrderType={setOrderType} tableNumber={tableNumber} setTableNumber={setTableNumber} guest={guest} setGuest={setGuest} phone={phone} setPhone={setPhone} kitchenNotes={kitchenNotes} setKitchenNotes={setKitchenNotes} deliveryAddress={deliveryAddress} setDeliveryAddress={setDeliveryAddress} latitude={latitude} setLatitude={setLatitude} longitude={longitude} setLongitude={setLongitude} />}
                 {checkoutStep === 2 && <PaymentStep payment={payment} setPayment={setPayment} total={total} />}
-                <div className="mt-7 flex items-center justify-between gap-3 border-t border-[#e4d9cf] pt-5">{checkoutStep > 0 ? <Button variant="outline" onClick={() => setCheckoutStep((current) => Math.max(0, current - 1))} className="h-12 rounded-full px-5">Back</Button> : <span />}{checkoutStep < 2 ? <Button onClick={() => setCheckoutStep((current) => current + 1)} disabled={checkoutStep === 0 ? !cartItems.length : !guest.trim() || (orderType === 'Dine in' && !tableNumber.trim())} className="h-12 rounded-full bg-[#6a2116] px-6 font-black hover:bg-[#521008]">Continue <ChevronRight /></Button> : <Button onClick={placeOrder} disabled={saving} className="h-12 rounded-full bg-[#f6a81b] px-6 font-black text-[#351008] hover:bg-[#e99a08]">{saving ? 'Sending order…' : `Place order · ${rupees.format(total)}`}</Button>}</div>
+                <div className="mt-7 flex items-center justify-between gap-3 border-t border-[#e4d9cf] pt-5">{checkoutStep > 0 ? <Button variant="outline" onClick={() => setCheckoutStep((current) => Math.max(0, current - 1))} className="h-12 rounded-full px-5">Back</Button> : <span />}{checkoutStep < 2 ? <Button onClick={() => setCheckoutStep((current) => current + 1)} disabled={checkoutStep === 0 ? !cartItems.length : !guest.trim() || phone.replace(/\D/g, '').length < 8 || (orderType === 'Dine in' && !tableNumber.trim()) || (orderType === 'Delivery' && !deliveryAddress.trim())} className="h-12 rounded-full bg-[#6a2116] px-6 font-black hover:bg-[#521008]">Continue <ChevronRight /></Button> : <Button onClick={placeOrder} disabled={saving} className="h-12 rounded-full bg-[#f6a81b] px-6 font-black text-[#351008] hover:bg-[#e99a08]">{saving ? 'Sending order…' : `Place order · ${rupees.format(total)}`}</Button>}</div>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
-      <ReservationDialog open={reservationOpen} onOpenChange={setReservationOpen} />
     </main>
   );
 }
@@ -202,8 +220,8 @@ function OrderTotal({ subtotal, tax, total }: { subtotal: number; tax: number; t
 }
 
 type DetailsProps = {
-  orderType: 'Dine in' | 'Takeaway';
-  setOrderType: (value: 'Dine in' | 'Takeaway') => void;
+  orderType: 'Dine in' | 'Takeaway' | 'Delivery';
+  setOrderType: (value: 'Dine in' | 'Takeaway' | 'Delivery') => void;
   tableNumber: string;
   setTableNumber: (value: string) => void;
   guest: string;
@@ -212,34 +230,22 @@ type DetailsProps = {
   setPhone: (value: string) => void;
   kitchenNotes: string;
   setKitchenNotes: (value: string) => void;
+  deliveryAddress: string;
+  setDeliveryAddress: (value: string) => void;
+  latitude: string;
+  setLatitude: (value: string) => void;
+  longitude: string;
+  setLongitude: (value: string) => void;
 };
 
-function DetailsStep({ orderType, setOrderType, tableNumber, setTableNumber, guest, setGuest, phone, setPhone, kitchenNotes, setKitchenNotes }: DetailsProps) {
-  return <div className="space-y-5"><div><h3 className="font-serif text-xl font-black">How should we serve you?</h3><p className="mt-1 text-sm text-[#806b61]">Table number helps the kitchen send your order to the right place.</p></div><div className="grid grid-cols-2 gap-3">{(['Dine in', 'Takeaway'] as const).map((type) => <button key={type} onClick={() => setOrderType(type)} className={`rounded-2xl border p-4 text-left transition ${orderType === type ? 'border-[#6a2116] bg-[#fff4e7] ring-2 ring-[#6a2116]/10' : 'border-[#ded3c8] bg-white'}`}><UtensilsCrossed className={`size-5 ${orderType === type ? 'text-[#8a2f1d]' : 'text-[#8b776e]'}`} /><b className="mt-3 block">{type === 'Dine in' ? 'Dine at table' : 'Takeaway'}</b><span className="mt-1 block text-xs text-[#806b61]">{type === 'Dine in' ? 'Serve at your table' : 'Collect at the counter'}</span></button>)}</div><div className={`grid gap-4 ${orderType === 'Dine in' ? 'sm:grid-cols-[120px_1fr]' : ''}`}>{orderType === 'Dine in' && <label htmlFor="guest-table" className="block space-y-2 text-sm font-extrabold">Table no.<Input id="guest-table" value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/[^0-9A-Za-z-]/g, '').slice(0, 3))} placeholder="05" className="h-12 text-base" /></label>}<label htmlFor="guest-name" className="block space-y-2 text-sm font-extrabold">Your name<Input id="guest-name" value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="Name for the order" className="h-12 text-base" /></label></div><label htmlFor="guest-phone" className="block space-y-2 text-sm font-extrabold">Mobile number <span className="font-medium text-[#8b776d]">(optional)</span><Input id="guest-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} placeholder="For order updates" inputMode="tel" className="h-12 text-base" /></label><label htmlFor="guest-kitchen-note" className="block space-y-2 text-sm font-extrabold">Note for the kitchen <span className="font-medium text-[#8b776d]">(optional)</span><Textarea id="guest-kitchen-note" value={kitchenNotes} onChange={(event) => setKitchenNotes(event.target.value)} placeholder="Less spicy, no onion, allergy note…" className="min-h-20 text-base" /></label></div>;
-}
-
-function ReservationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [customerName, setCustomerName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [guests, setGuests] = useState(2);
-  const [bookingDate, setBookingDate] = useState(new Date().toISOString().slice(0, 10));
-  const [bookingTime, setBookingTime] = useState('19:30');
-  const [tableNumber, setTableNumber] = useState('01');
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [confirmation, setConfirmation] = useState<BookingRecord | null>(null);
-  async function submit() {
-    setError(''); setSaving(true);
-    try {
-      const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, phone, guests, bookingDate, bookingTime, tableNumber: tableNumber.padStart(2, '0'), notes }) });
-      const data = (await response.json()) as { booking?: BookingRecord; error?: string };
-      if (!response.ok || !data.booking) throw new Error(data.error || 'Booking could not be saved');
-      setConfirmation(data.booking);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Booking could not be saved'); }
-    finally { setSaving(false); }
+function DetailsStep({ orderType, setOrderType, tableNumber, setTableNumber, guest, setGuest, phone, setPhone, kitchenNotes, setKitchenNotes, deliveryAddress, setDeliveryAddress, latitude, setLatitude, longitude, setLongitude }: DetailsProps) {
+  const [locationStatus, setLocationStatus] = useState('');
+  function detectLocation() {
+    if (!navigator.geolocation) { setLocationStatus('Location is not supported on this device.'); return; }
+    setLocationStatus('Finding your location…');
+    navigator.geolocation.getCurrentPosition((position) => { setLatitude(position.coords.latitude.toFixed(6)); setLongitude(position.coords.longitude.toFixed(6)); setLocationStatus('Location attached to this delivery.'); }, () => setLocationStatus('Location permission was not granted.'), { enableHighAccuracy: true, timeout: 10000 });
   }
-  return <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) { setConfirmation(null); setError(''); } }}><DialogContent className="max-h-[92vh] overflow-y-auto rounded-[24px] sm:max-w-lg">{confirmation ? <div className="py-6 text-center"><span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-8" /></span><DialogTitle className="mt-5 font-serif text-3xl font-black">Table booked</DialogTitle><DialogDescription className="mt-2">Booking <b className="text-[#6a2116]">{confirmation.bookingNumber}</b> is confirmed for table {confirmation.tableNumber} on {confirmation.bookingDate} at {confirmation.bookingTime}.</DialogDescription><Button onClick={() => onOpenChange(false)} className="mt-6 bg-[#6a2116] hover:bg-[#521008]">Done</Button></div> : <><DialogHeader><DialogTitle className="font-serif text-2xl font-black">Reserve your table</DialogTitle><DialogDescription>Choose your date, time and preferred table. The restaurant will see this booking instantly.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Your name<Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Guest name" /></label><label className="space-y-2 text-sm font-extrabold">Mobile number<Input value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} inputMode="tel" /></label><label className="space-y-2 text-sm font-extrabold">Guests<div className="relative"><Users className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#8b776d]" /><Input type="number" min="1" max="20" value={guests} onChange={(event) => setGuests(Number(event.target.value))} className="pl-9" /></div></label><label className="space-y-2 text-sm font-extrabold">Date<Input type="date" min={new Date().toISOString().slice(0, 10)} value={bookingDate} onChange={(event) => setBookingDate(event.target.value)} /></label><label className="space-y-2 text-sm font-extrabold">Time<Input type="time" value={bookingTime} onChange={(event) => setBookingTime(event.target.value)} /></label><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Preferred table (01–16)<Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="01" /></label><label className="space-y-2 text-sm font-extrabold sm:col-span-2">Special request <span className="font-medium text-[#8b776d]">(optional)</span><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Birthday, high chair, accessibility…" /></label>{error && <p className="text-sm font-bold text-red-700 sm:col-span-2">{error}</p>}<Button onClick={submit} disabled={saving || !customerName.trim() || !phone.trim() || !bookingDate || !bookingTime || !tableNumber} className="h-12 bg-[#6a2116] font-black hover:bg-[#521008] sm:col-span-2">{saving ? 'Booking…' : 'Confirm table booking'}</Button></div></>}</DialogContent></Dialog>;
+  return <div className="space-y-5"><div><h3 className="font-serif text-xl font-black">How should we serve you?</h3><p className="mt-1 text-sm text-[#806b61]">Choose dine-in, counter pickup or delivery.</p></div><div className="grid grid-cols-3 gap-2">{(['Dine in', 'Takeaway', 'Delivery'] as const).map((type) => <button key={type} onClick={() => setOrderType(type)} className={`rounded-2xl border p-3 text-left transition ${orderType === type ? 'border-[#6a2116] bg-[#fff4e7] ring-2 ring-[#6a2116]/10' : 'border-[#ded3c8] bg-white'}`}><UtensilsCrossed className={`size-5 ${orderType === type ? 'text-[#8a2f1d]' : 'text-[#8b776e]'}`} /><b className="mt-2 block text-sm">{type}</b></button>)}</div><div className={`grid gap-4 ${orderType === 'Dine in' ? 'sm:grid-cols-[120px_1fr]' : ''}`}>{orderType === 'Dine in' && <label htmlFor="guest-table" className="block space-y-2 text-sm font-extrabold">Table no.<Input id="guest-table" value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/[^0-9A-Za-z-]/g, '').slice(0, 3))} placeholder="05" className="h-12 text-base" /></label>}<label htmlFor="guest-name" className="block space-y-2 text-sm font-extrabold">Your name<Input id="guest-name" value={guest} onChange={(event) => setGuest(event.target.value)} placeholder="Name for the order" className="h-12 text-base" /></label></div><label htmlFor="guest-phone" className="block space-y-2 text-sm font-extrabold">Mobile number <span className="font-medium text-[#8b776d]">(required for tracking)</span><Input id="guest-phone" value={phone} onChange={(event) => setPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} placeholder="For order updates" inputMode="tel" className="h-12 text-base" /></label>{orderType === 'Delivery' && <div className="rounded-2xl border border-[#e2d6cb] bg-[#faf6f1] p-4"><label htmlFor="delivery-address" className="block space-y-2 text-sm font-extrabold">Delivery address<Textarea id="delivery-address" value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="House, street, landmark and area" className="min-h-20 bg-white text-base" /></label><Button type="button" onClick={detectLocation} variant="outline" className="mt-3 w-full bg-white"><LocateFixed /> Use my current location</Button>{locationStatus && <p className="mt-2 text-xs font-bold text-[#735e54]">{locationStatus}{latitude && longitude ? ` (${latitude}, ${longitude})` : ''}</p>}</div>}<label htmlFor="guest-kitchen-note" className="block space-y-2 text-sm font-extrabold">Note for the kitchen <span className="font-medium text-[#8b776d]">(optional)</span><Textarea id="guest-kitchen-note" value={kitchenNotes} onChange={(event) => setKitchenNotes(event.target.value)} placeholder="Less spicy, no onion, allergy note…" className="min-h-20 text-base" /></label></div>;
 }
 
 function PaymentStep({ payment, setPayment, total }: { payment: (typeof paymentOptions)[number]['name']; setPayment: (value: (typeof paymentOptions)[number]['name']) => void; total: number }) {

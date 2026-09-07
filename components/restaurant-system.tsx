@@ -14,6 +14,8 @@ import {
   Eye,
   IndianRupee,
   LayoutGrid,
+  Link as LinkIcon,
+  Megaphone,
   Minus,
   PackageOpen,
   PackageCheck,
@@ -22,6 +24,7 @@ import {
   Printer,
   ReceiptText,
   Search,
+  Settings2,
   ShoppingBag,
   Smartphone,
   Sparkles,
@@ -74,23 +77,29 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
-  categories,
+  defaultCustomerSettings,
   demoInventory,
   demoOrders,
   menu,
   type BookingRecord,
+  type CustomerSettings,
   type MenuItem,
   type OrderRecord,
   type StockItem,
 } from '@/lib/restaurant-data';
 
-type View = 'pos' | 'kitchen' | 'tables' | 'orders' | 'inventory' | 'reports';
+type View = 'pos' | 'kitchen' | 'tables' | 'orders' | 'inventory' | 'reports' | 'content';
 type Cart = Record<number, number>;
 type CheckoutPayload = {
   orderType: string;
   tableNumber?: string;
   customerName?: string;
+  customerPhone?: string;
+  deliveryAddress?: string;
+  latitude?: string;
+  longitude?: string;
   paymentMethod?: string;
   discount?: number;
   notes?: string;
@@ -105,6 +114,7 @@ const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'orders', label: 'Orders', icon: ClipboardList },
   { id: 'inventory', label: 'Inventory', icon: PackageOpen },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
+  { id: 'content', label: 'Menu & offers', icon: Settings2 },
 ];
 
 const headings: Record<View, { eyebrow: string; title: string }> = {
@@ -114,6 +124,7 @@ const headings: Record<View, { eyebrow: string; title: string }> = {
   orders: { eyebrow: 'Today · All channels', title: 'Orders & billing' },
   inventory: { eyebrow: 'Last checked 10 minutes ago', title: 'Inventory' },
   reports: { eyebrow: 'Sunday, 7 September', title: 'Daily performance' },
+  content: { eyebrow: 'Customer website controls', title: 'Menu & promotions' },
 };
 
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
@@ -149,6 +160,10 @@ async function createOrder(payload: CheckoutPayload): Promise<OrderRecord> {
       orderType: payload.orderType,
       tableNumber: payload.tableNumber ?? null,
       customerName: payload.customerName ?? null,
+      customerPhone: payload.customerPhone ?? null,
+      deliveryAddress: payload.deliveryAddress ?? null,
+      latitude: payload.latitude ?? null,
+      longitude: payload.longitude ?? null,
       status: 'new',
       paymentStatus: payload.paymentMethod ? 'paid' : 'pending',
       paymentMethod: payload.paymentMethod ?? null,
@@ -171,12 +186,16 @@ export function RestaurantSystem() {
   const [orderType, setOrderType] = useState('Dine in');
   const [selectedTable, setSelectedTable] = useState('08');
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [discount, setDiscount] = useState(0);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('Pay later');
   const [notes, setNotes] = useState('');
   const [orders, setOrders] = useState<OrderRecord[]>(demoOrders);
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
+  const [catalog, setCatalog] = useState<MenuItem[]>(menu.map((item) => ({ ...item, active: true })));
+  const [customerSettings, setCustomerSettings] = useState<CustomerSettings>(defaultCustomerSettings);
   const [stock, setStock] = useState<StockItem[]>(demoInventory);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -206,6 +225,20 @@ export function RestaurantSystem() {
         if (result?.bookings) setBookings(result.bookings);
       })
       .catch(() => undefined);
+    fetch('/api/menu?includeInactive=1')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const result = data as { items?: MenuItem[] } | null;
+        if (result?.items?.length) setCatalog(result.items);
+      })
+      .catch(() => undefined);
+    fetch('/api/settings')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        const result = data as { settings?: CustomerSettings } | null;
+        if (result?.settings) setCustomerSettings(result.settings);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -214,15 +247,16 @@ export function RestaurantSystem() {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const filtered = menu.filter((item) =>
+  const filtered = catalog.filter((item) => item.active !== false &&
     (category === 'All' || item.category === category) &&
     `${item.name} ${item.note}`.toLowerCase().includes(query.toLowerCase()),
   );
-  const cartItems = menu.filter((item) => cart[item.id]);
+  const cartItems = catalog.filter((item) => item.active !== false && cart[item.id]);
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * cart[item.id], 0);
   const tax = Math.round(subtotal * 0.05);
   const total = Math.max(0, subtotal + tax - discount);
   const activeTickets = orders.filter((order) => ['new', 'preparing', 'ready'].includes(order.status));
+  const categoryNames = ['All', ...new Set(catalog.filter((item) => item.active !== false).map((item) => item.category))];
 
   async function submitOrder(payload: CheckoutPayload) {
     const created = await createOrder(payload);
@@ -307,6 +341,8 @@ export function RestaurantSystem() {
       orderType,
       tableNumber: orderType === 'Dine in' ? selectedTable : undefined,
       customerName: customerName || undefined,
+      customerPhone: customerPhone || undefined,
+      deliveryAddress: orderType === 'Delivery' ? deliveryAddress || undefined : undefined,
       paymentMethod: paymentMethod === 'Pay later' ? undefined : paymentMethod,
       discount,
       notes: notes || undefined,
@@ -316,6 +352,8 @@ export function RestaurantSystem() {
     setCheckoutOpen(false);
     setCart({});
     setCustomerName('');
+    setCustomerPhone('');
+    setDeliveryAddress('');
     setDiscount(0);
     setNotes('');
     setActiveView('kitchen');
@@ -452,12 +490,13 @@ export function RestaurantSystem() {
             </div>
           </header>
 
-          {activeView === 'pos' && <POSView {...{ category, setCategory, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }} />}
+          {activeView === 'pos' && <POSView {...{ category, setCategory, categoryNames, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }} />}
           {activeView === 'kitchen' && <KitchenView orders={orders} onAdvance={advanceOrder} />}
           {activeView === 'tables' && <TablesView selectedTable={selectedTable} orders={orders} bookings={bookings} onSelect={chooseTable} onCreateBooking={createBooking} onUpdateBooking={updateBookingStatus} />}
-          {activeView === 'orders' && <OrdersView orders={orders} onUpdate={updateOrder} onDelete={deleteOrder} />}
+          {activeView === 'orders' && <OrdersView orders={orders} catalog={catalog.filter((item) => item.active !== false)} onUpdate={updateOrder} onDelete={deleteOrder} />}
           {activeView === 'inventory' && <InventoryView stock={stock} onAdjust={updateStock} />}
           {activeView === 'reports' && <ReportsView orders={orders} />}
+          {activeView === 'content' && <ContentManager items={catalog} settings={customerSettings} onItemsChange={setCatalog} onSettingsChange={setCustomerSettings} />}
         </section>
       </div>
 
@@ -475,7 +514,9 @@ export function RestaurantSystem() {
           </DialogHeader>
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <label htmlFor="guest-name" className="space-y-2 text-sm font-bold sm:col-span-2">Guest name <span className="font-normal text-[#8b776d]">(optional)</span><Input id="guest-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="e.g. Mr Mehra" className="h-11 bg-white" /></label>
+            <label htmlFor="guest-phone" className="space-y-2 text-sm font-bold sm:col-span-2">Mobile number <span className="font-normal text-[#8b776d]">(for tracking)</span><Input id="guest-phone" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16))} placeholder="Customer mobile" className="h-11 bg-white" /></label>
             {orderType === 'Dine in' && <label htmlFor="table-number" className="space-y-2 text-sm font-bold">Table<Input id="table-number" value={selectedTable} onChange={() => undefined} readOnly className="h-11 bg-[#f6f1eb]" /></label>}
+            {orderType === 'Delivery' && <label htmlFor="staff-delivery-address" className="space-y-2 text-sm font-bold sm:col-span-2">Delivery address<Textarea id="staff-delivery-address" value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="House, street, landmark and area" className="min-h-20 bg-white" /></label>}
             <label htmlFor="bill-discount" className="space-y-2 text-sm font-bold">Discount (₹)<Input id="bill-discount" type="number" min="0" max={subtotal} value={discount} onChange={(event) => setDiscount(Math.max(0, Number(event.target.value)))} className="h-11 bg-white" /></label>
             <label htmlFor="kitchen-notes" className="space-y-2 text-sm font-bold sm:col-span-2">Kitchen notes <span className="font-normal text-[#8b776d]">(optional)</span><Textarea id="kitchen-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Less spicy, no onion, allergy note…" className="min-h-20 bg-white" /></label>
           </div>
@@ -511,13 +552,13 @@ function Brand() {
 }
 
 type POSProps = {
-  category: string; setCategory: (value: string) => void; query: string; setQuery: (value: string) => void;
-  filtered: typeof menu; cart: Cart; cartItems: typeof menu; subtotal: number; tax: number; discount: number; total: number;
+  category: string; setCategory: (value: string) => void; categoryNames: string[]; query: string; setQuery: (value: string) => void;
+  filtered: MenuItem[]; cart: Cart; cartItems: MenuItem[]; subtotal: number; tax: number; discount: number; total: number;
   orderType: string; setOrderType: (value: string) => void; selectedTable: string;
   changeQuantity: (id: number, change: number) => void; setCheckoutOpen: (value: boolean) => void;
 };
 
-function POSView({ category, setCategory, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }: POSProps) {
+function POSView({ category, setCategory, categoryNames, query, setQuery, filtered, cart, cartItems, subtotal, tax, discount, total, orderType, setOrderType, selectedTable, changeQuantity, setCheckoutOpen }: POSProps) {
   const itemCount = cartItems.reduce((sum, item) => sum + cart[item.id], 0);
   const [cartOpen, setCartOpen] = useState(false);
   return (
@@ -530,7 +571,7 @@ function POSView({ category, setCategory, query, setQuery, filtered, cart, cartI
           </div>
         </div>
         <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-          {categories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition ${category === name ? 'border-[#6d2416] bg-[#6d2416] text-white' : 'border-[#ded8ce] bg-white text-[#6e5b51] hover:border-[#b49d91]'}`}>{name}</button>)}
+          {categoryNames.map((name) => <button key={name} onClick={() => setCategory(name)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition ${category === name ? 'border-[#6d2416] bg-[#6d2416] text-white' : 'border-[#ded8ce] bg-white text-[#6e5b51] hover:border-[#b49d91]'}`}>{name}</button>)}
         </div>
         <div className="mb-4 flex items-end justify-between gap-3">
           <div><h2 className="font-serif text-2xl font-bold">Our menu</h2><p className="mt-1 text-sm text-[#7a6960]">{filtered.length} dishes available</p></div>
@@ -572,7 +613,7 @@ function POSView({ category, setCategory, query, setQuery, filtered, cart, cartI
   );
 }
 
-function MenuCard({ item, onAdd }: { item: (typeof menu)[number]; onAdd: () => void }) {
+function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
   return (
     <article className="group overflow-hidden rounded-[20px] border border-[#dfd9cf] bg-white shadow-[0_8px_30px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_38px_rgba(66,39,25,.11)]">
       <div className="relative h-32 overflow-hidden"><FoodThumb item={item} className="h-full w-full transition duration-500 group-hover:scale-105" /><span className={`absolute left-3 top-3 grid size-5 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}><span className={`size-2 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`} /></span><span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#6d2416] shadow-sm">{item.category}</span></div>
@@ -581,11 +622,12 @@ function MenuCard({ item, onAdd }: { item: (typeof menu)[number]; onAdd: () => v
   );
 }
 
-function CartRow({ item, quantity, onChange }: { item: (typeof menu)[number]; quantity: number; onChange: (id: number, amount: number) => void }) {
+function CartRow({ item, quantity, onChange }: { item: MenuItem; quantity: number; onChange: (id: number, amount: number) => void }) {
   return <div className="flex items-center gap-3 rounded-2xl border border-[#e4ded5] bg-white p-3"><FoodThumb item={item} className="size-10 shrink-0 rounded-lg" /><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7a6960]">{rupees.format(item.price)}</p></div><div className="flex items-center gap-2 rounded-full bg-[#f4eee7] p-1"><button onClick={() => onChange(item.id, -1)} className="grid size-7 place-items-center rounded-full bg-white shadow-sm" aria-label={`Remove one ${item.name}`}><Minus className="size-3" /></button><span className="min-w-4 text-center text-sm font-bold">{quantity}</span><button onClick={() => onChange(item.id, 1)} className="grid size-7 place-items-center rounded-full bg-[#6d2416] text-white" aria-label={`Add one ${item.name}`}><Plus className="size-3" /></button></div></div>;
 }
 
 function FoodThumb({ item, className }: { item: MenuItem; className: string }) {
+  if (item.photoUrl) return <div aria-hidden="true" className={`bg-cover bg-center ${className}`} style={{ backgroundImage: `url('${item.photoUrl}')` }} />;
   const column = item.photo % 5;
   const row = Math.floor(item.photo / 5);
   return <div aria-hidden="true" className={`bg-no-repeat ${className}`} style={{ backgroundImage: "url('/tripti-food-atlas.png')", backgroundPosition: `${column * 25}% ${row * 25}%`, backgroundSize: '500% 500%' }} />;
@@ -601,7 +643,7 @@ function Ticket({ order, onAdvance }: { order: OrderRecord; onAdvance: (order: O
   const serviceInstruction = isDineIn ? `Serve at table ${order.tableNumber || '—'}` : order.orderType === 'Delivery' ? 'Pack for delivery' : 'Pack for takeaway';
   const label = order.status === 'new' ? 'Start cooking' : order.status === 'preparing' ? 'Mark ready' : isDineIn ? 'Mark served' : 'Mark handed over';
   const ServiceIcon = isDineIn ? UtensilsCrossed : order.orderType === 'Delivery' ? Truck : PackageCheck;
-  return <article className="rounded-2xl border border-[#ded8ce] bg-white p-4 shadow-[0_6px_20px_rgba(55,35,22,.06)]"><div className="flex items-start justify-between gap-3"><div><p className="font-serif text-lg font-bold">{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || order.orderType}</p><p className="mt-0.5 text-xs font-bold text-[#8f796e]">{order.orderNumber}{order.customerName ? ` · ${order.customerName}` : ''}</p></div><span className="flex shrink-0 items-center gap-1 rounded-full bg-[#f3eee8] px-2.5 py-1 text-xs font-bold"><Clock3 className="size-3" />{elapsed(order.createdAt)}</span></div><div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${isDineIn ? 'bg-blue-50 text-blue-800' : order.orderType === 'Delivery' ? 'bg-violet-50 text-violet-800' : 'bg-amber-50 text-amber-800'}`}><ServiceIcon className="size-4" />{serviceInstruction}</div><div className="my-4 space-y-2 border-y border-dashed border-[#ddd3ca] py-3">{order.items?.length ? order.items.map((item) => <div key={`${order.id}-${item.menuItemId}`} className="flex gap-3 text-sm"><span className="font-bold text-[#6d2416]">{item.quantity}×</span><span>{item.name}</span></div>) : <p className="text-sm text-[#7e6c62]">No item details found</p>}</div>{order.notes && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"><b className="block text-xs uppercase tracking-wide">Kitchen note</b><span>{order.notes}</span></div>}<Button onClick={() => onAdvance(order)} variant={order.status === 'ready' ? 'default' : 'outline'} className={order.status === 'ready' ? 'h-10 w-full bg-emerald-700 hover:bg-emerald-800' : 'h-10 w-full bg-white'}>{label}<ArrowRight className="ml-1" /></Button></article>;
+  return <article className="rounded-2xl border border-[#ded8ce] bg-white p-4 shadow-[0_6px_20px_rgba(55,35,22,.06)]"><div className="flex items-start justify-between gap-3"><div><p className="font-serif text-lg font-bold">{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || order.orderType}</p><p className="mt-0.5 text-xs font-bold text-[#8f796e]">{order.orderNumber}{order.customerName ? ` · ${order.customerName}` : ''}</p></div><span className="flex shrink-0 items-center gap-1 rounded-full bg-[#f3eee8] px-2.5 py-1 text-xs font-bold"><Clock3 className="size-3" />{elapsed(order.createdAt)}</span></div><div className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${isDineIn ? 'bg-blue-50 text-blue-800' : order.orderType === 'Delivery' ? 'bg-violet-50 text-violet-800' : 'bg-amber-50 text-amber-800'}`}><ServiceIcon className="size-4" />{serviceInstruction}</div>{order.orderType === 'Delivery' && order.deliveryAddress && <div className="mt-3 rounded-xl bg-[#f4efff] px-3 py-2 text-sm text-violet-900"><b className="block text-xs uppercase tracking-wide">Deliver to</b><span>{order.deliveryAddress}</span>{order.latitude && order.longitude && <a href={`https://www.google.com/maps?q=${order.latitude},${order.longitude}`} target="_blank" rel="noreferrer" className="mt-1 block font-bold underline">Open detected location</a>}</div>}<div className="my-4 space-y-2 border-y border-dashed border-[#ddd3ca] py-3">{order.items?.length ? order.items.map((item) => <div key={`${order.id}-${item.menuItemId}`} className="flex gap-3 text-sm"><span className="font-bold text-[#6d2416]">{item.quantity}×</span><span>{item.name}</span></div>) : <p className="text-sm text-[#7e6c62]">No item details found</p>}</div>{order.notes && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"><b className="block text-xs uppercase tracking-wide">Kitchen note</b><span>{order.notes}</span></div>}<Button onClick={() => onAdvance(order)} variant={order.status === 'ready' ? 'default' : 'outline'} className={order.status === 'ready' ? 'h-10 w-full bg-emerald-700 hover:bg-emerald-800' : 'h-10 w-full bg-white'}>{label}<ArrowRight className="ml-1" /></Button></article>;
 }
 
 function TablesView({ selectedTable, orders, bookings, onSelect, onCreateBooking, onUpdateBooking }: { selectedTable: string; orders: OrderRecord[]; bookings: BookingRecord[]; onSelect: (table: string) => void; onCreateBooking: (payload: BookingPayload) => Promise<BookingRecord>; onUpdateBooking: (booking: BookingRecord, status: BookingRecord['status']) => Promise<void> }) {
@@ -640,21 +682,21 @@ function StaffBookingDialog({ open, onOpenChange, preferredTable, onCreate }: { 
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] overflow-y-auto rounded-[22px] sm:max-w-lg"><DialogHeader><DialogTitle className="font-serif text-2xl font-bold">Book a table</DialogTitle><DialogDescription>Create a staff booking. The table will show as booked until it is completed or cancelled.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-bold sm:col-span-2">Customer name<Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Guest name" /></label><label className="space-y-2 text-sm font-bold">Phone<Input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Mobile number" /></label><label className="space-y-2 text-sm font-bold">Guests<Input type="number" min="1" max="20" value={guests} onChange={(event) => setGuests(Number(event.target.value))} /></label><label className="space-y-2 text-sm font-bold">Date<Input type="date" min={new Date().toISOString().slice(0, 10)} value={bookingDate} onChange={(event) => setBookingDate(event.target.value)} /></label><label className="space-y-2 text-sm font-bold">Time<Input type="time" value={bookingTime} onChange={(event) => setBookingTime(event.target.value)} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Table number<Input value={tableNumber} onChange={(event) => setTableNumber(event.target.value.replace(/\D/g, '').slice(0, 2))} placeholder="01" /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Booking notes <span className="font-normal text-[#8b776d]">(optional)</span><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Birthday setup, high chair…" /></label>{error && <p className="text-sm font-bold text-red-700 sm:col-span-2">{error}</p>}</div><DialogFooter><Button onClick={submit} disabled={saving || !customerName.trim() || !phone.trim() || !bookingDate || !bookingTime || !tableNumber} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Confirm booking'}</Button></DialogFooter></DialogContent></Dialog>;
 }
 
-function OrdersView({ orders, onUpdate, onDelete }: { orders: OrderRecord[]; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
+function OrdersView({ orders, catalog, onUpdate, onDelete }: { orders: OrderRecord[]; catalog: MenuItem[]; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<OrderRecord | null>(null);
   const shown = orders.filter((order) => `${order.orderNumber} ${order.customerName ?? ''} ${order.tableNumber ?? ''}`.toLowerCase().includes(search.toLowerCase()));
   const sales = orders.filter((order) => order.status !== 'cancelled').reduce((sum, order) => sum + order.total, 0);
   const pending = orders.filter((order) => order.paymentStatus === 'pending');
-  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-5 grid gap-3 sm:grid-cols-3"><MetricCard icon={ReceiptText} label="Orders" value={String(orders.length)} note={`${orders.filter((order) => ['new', 'preparing', 'ready'].includes(order.status)).length} active now`} /><MetricCard icon={CircleDollarSign} label="Net sales" value={rupees.format(sales)} note={orders.length ? `${rupees.format(Math.round(sales / orders.length))} average bill` : 'No orders yet'} /><MetricCard icon={WalletCards} label="Pending bills" value={rupees.format(pending.reduce((sum, order) => sum + order.total, 0))} note={`${pending.length} awaiting payment`} /></div><div className="overflow-hidden rounded-[22px] border border-[#ded8ce] bg-white p-4 shadow-sm md:p-5"><div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-serif text-xl font-bold">Order register</h2><p className="text-sm text-[#7d6a60]">Open any order to see details, edit it or delete it</p></div><div className="relative sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#907d73]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, guest or table" className="h-10 pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Guest / table</TableHead><TableHead>Channel</TableHead><TableHead>Status</TableHead><TableHead>Payment</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{shown.map((order) => <TableRow key={order.id}><TableCell><p className="font-bold">{order.orderNumber}</p><p className="text-xs text-[#8b776d]">{new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></TableCell><TableCell>{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</TableCell><TableCell>{order.orderType}</TableCell><TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(order.status)}`}>{order.status}</span></TableCell><TableCell><span className={order.paymentStatus === 'paid' ? 'font-bold text-emerald-700' : 'font-bold text-amber-700'}>{order.paymentStatus === 'paid' ? order.paymentMethod || 'Paid' : 'Pending'}</span></TableCell><TableCell className="text-right font-bold">{rupees.format(order.total)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button onClick={() => setSelected(order)} variant="ghost" size="icon-sm" aria-label={`View ${order.orderNumber}`}><Eye /></Button><Button variant="ghost" size="icon-sm" aria-label={`Print ${order.orderNumber}`}><Printer /></Button></div></TableCell></TableRow>)}</TableBody></Table></div></div><OrderDetailsDialog order={selected} onOpenChange={(open) => { if (!open) setSelected(null); }} onUpdate={async (updated) => { const saved = await onUpdate(updated); if (saved) setSelected(updated); return saved; }} onDelete={async (deletedOrder) => { const deleted = await onDelete(deletedOrder); if (deleted) setSelected(null); return deleted; }} /></section>;
+  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="mb-5 grid gap-3 sm:grid-cols-3"><MetricCard icon={ReceiptText} label="Orders" value={String(orders.length)} note={`${orders.filter((order) => ['new', 'preparing', 'ready'].includes(order.status)).length} active now`} /><MetricCard icon={CircleDollarSign} label="Net sales" value={rupees.format(sales)} note={orders.length ? `${rupees.format(Math.round(sales / orders.length))} average bill` : 'No orders yet'} /><MetricCard icon={WalletCards} label="Pending bills" value={rupees.format(pending.reduce((sum, order) => sum + order.total, 0))} note={`${pending.length} awaiting payment`} /></div><div className="overflow-hidden rounded-[22px] border border-[#ded8ce] bg-white p-4 shadow-sm md:p-5"><div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-serif text-xl font-bold">Order register</h2><p className="text-sm text-[#7d6a60]">Open any order to see details, edit it or delete it</p></div><div className="relative sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#907d73]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search order, guest or table" className="h-10 pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Guest / table</TableHead><TableHead>Channel</TableHead><TableHead>Status</TableHead><TableHead>Payment</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{shown.map((order) => <TableRow key={order.id}><TableCell><p className="font-bold">{order.orderNumber}</p><p className="text-xs text-[#8b776d]">{new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></TableCell><TableCell>{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</TableCell><TableCell>{order.orderType}</TableCell><TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(order.status)}`}>{order.status}</span></TableCell><TableCell><span className={order.paymentStatus === 'paid' ? 'font-bold text-emerald-700' : 'font-bold text-amber-700'}>{order.paymentStatus === 'paid' ? order.paymentMethod || 'Paid' : 'Pending'}</span></TableCell><TableCell className="text-right font-bold">{rupees.format(order.total)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button onClick={() => setSelected(order)} variant="ghost" size="icon-sm" aria-label={`View ${order.orderNumber}`}><Eye /></Button><Button variant="ghost" size="icon-sm" aria-label={`Print ${order.orderNumber}`}><Printer /></Button></div></TableCell></TableRow>)}</TableBody></Table></div></div><OrderDetailsDialog order={selected} catalog={catalog} onOpenChange={(open) => { if (!open) setSelected(null); }} onUpdate={async (updated) => { const saved = await onUpdate(updated); if (saved) setSelected(updated); return saved; }} onDelete={async (deletedOrder) => { const deleted = await onDelete(deletedOrder); if (deleted) setSelected(null); return deleted; }} /></section>;
 }
 
-function OrderDetailsDialog({ order, onOpenChange, onUpdate, onDelete }: { order: OrderRecord | null; onOpenChange: (open: boolean) => void; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
+function OrderDetailsDialog({ order, catalog, onOpenChange, onUpdate, onDelete }: { order: OrderRecord | null; catalog: MenuItem[]; onOpenChange: (open: boolean) => void; onUpdate: (order: OrderRecord) => Promise<boolean>; onDelete: (order: OrderRecord) => Promise<boolean> }) {
   const [draft, setDraft] = useState<OrderRecord | null>(order);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [addItemId, setAddItemId] = useState(String(menu[0].id));
+  const [addItemId, setAddItemId] = useState(String(catalog[0]?.id ?? menu[0].id));
   useEffect(() => { setDraft(order ? { ...order, items: order.items?.map((item) => ({ ...item })) } : null); setEditing(false); }, [order]);
   if (!order || !draft) return null;
   const editItems = draft.items ?? [];
@@ -662,7 +704,7 @@ function OrderDetailsDialog({ order, onOpenChange, onUpdate, onDelete }: { order
     setDraft((current) => current ? { ...current, items: (current.items ?? []).map((item) => item.menuItemId === menuItemId ? { ...item, quantity: Math.max(0, item.quantity + amount) } : item).filter((item) => item.quantity > 0) } : current);
   }
   function addDish() {
-    const dish = menu.find((item) => item.id === Number(addItemId));
+    const dish = catalog.find((item) => item.id === Number(addItemId));
     if (!dish) return;
     setDraft((current) => {
       if (!current) return current;
@@ -672,15 +714,17 @@ function OrderDetailsDialog({ order, onOpenChange, onUpdate, onDelete }: { order
     });
   }
   async function save() {
+    if (!draft) return;
+    const currentDraft = draft;
     setSaving(true);
     const subtotal = editItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const tax = Math.round(subtotal * 0.05);
-    const discount = Math.max(0, Math.min(draft.discount, subtotal));
-    const updated = { ...draft, subtotal, tax, discount, total: subtotal + tax - discount };
+    const discount = Math.max(0, Math.min(currentDraft.discount, subtotal));
+    const updated: OrderRecord = { ...currentDraft, subtotal, tax, discount, total: subtotal + tax - discount };
     if (await onUpdate(updated)) { setDraft(updated); setEditing(false); }
     setSaving(false);
   }
-  return <Dialog open={Boolean(order)} onOpenChange={onOpenChange}><DialogContent className="max-h-[94vh] overflow-y-auto rounded-[22px] sm:max-w-2xl"><DialogHeader><div className="flex items-start justify-between gap-4 pr-8"><div><DialogTitle className="font-serif text-2xl font-bold">{draft.orderNumber}</DialogTitle><DialogDescription>{new Date(draft.createdAt).toLocaleString('en-IN')} · {draft.orderType}</DialogDescription></div><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(draft.status)}`}>{draft.status}</span></div></DialogHeader>{editing ? <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><EditSelect label="Order type" value={draft.orderType} options={['Dine in', 'Takeaway', 'Delivery']} onChange={(orderType) => setDraft({ ...draft, orderType, tableNumber: orderType === 'Dine in' ? draft.tableNumber : null })} /><EditSelect label="Order status" value={draft.status} options={['new', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(status) => setDraft({ ...draft, status })} />{draft.orderType === 'Dine in' && <label className="space-y-2 text-sm font-bold">Table number<Input value={draft.tableNumber ?? ''} onChange={(event) => setDraft({ ...draft, tableNumber: event.target.value })} /></label>}<label className="space-y-2 text-sm font-bold">Customer name<Input value={draft.customerName ?? ''} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} /></label><EditSelect label="Payment status" value={draft.paymentStatus} options={['pending', 'paid', 'refunded']} onChange={(paymentStatus) => setDraft({ ...draft, paymentStatus })} /><EditSelect label="Payment method" value={draft.paymentMethod ?? 'Pay later'} options={['Pay later', 'Cash', 'UPI', 'Card']} onChange={(paymentMethod) => setDraft({ ...draft, paymentMethod: paymentMethod === 'Pay later' ? null : paymentMethod })} /><label className="space-y-2 text-sm font-bold">Discount (₹)<Input type="number" min="0" value={draft.discount} onChange={(event) => setDraft({ ...draft, discount: Math.max(0, Number(event.target.value)) })} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Kitchen notes<Textarea value={draft.notes ?? ''} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label></div><div><p className="mb-3 text-sm font-bold">Order items</p><div className="mb-3 flex gap-2"><Select value={addItemId} onValueChange={(value) => value && setAddItemId(String(value))}><SelectTrigger className="h-10 min-w-0 flex-1 bg-white"><SelectValue /></SelectTrigger><SelectContent>{menu.map((dish) => <SelectItem key={dish.id} value={String(dish.id)}>{dish.name} · {rupees.format(dish.price)}</SelectItem>)}</SelectContent></Select><Button onClick={addDish} variant="outline"><Plus /> Add dish</Button></div><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex items-center gap-3 rounded-xl border border-[#e3d9cf] p-3"><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7d6a60]">{rupees.format(item.unitPrice)} each</p></div><div className="flex items-center gap-2"><Button onClick={() => changeItem(item.menuItemId, -1)} variant="outline" size="icon-sm"><Minus /></Button><b>{item.quantity}</b><Button onClick={() => changeItem(item.menuItemId, 1)} variant="outline" size="icon-sm"><Plus /></Button></div></div>)}</div></div></div> : <div className="space-y-5"><div className="grid gap-3 rounded-2xl bg-[#f6f1eb] p-4 text-sm sm:grid-cols-2"><Detail label="Guest" value={draft.customerName || 'Walk-in'} /><Detail label="Table / channel" value={draft.tableNumber ? `Table ${draft.tableNumber}` : draft.orderType} /><Detail label="Payment" value={draft.paymentStatus === 'paid' ? `${draft.paymentMethod || 'Paid'} · paid` : draft.paymentStatus} /><Detail label="Order status" value={draft.status} /></div><div><h3 className="mb-3 font-serif text-lg font-bold">Items</h3><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex justify-between rounded-xl border border-[#e3d9cf] px-3 py-2 text-sm"><span><b className="mr-2 text-[#6d2416]">{item.quantity}×</b>{item.name}</span><b>{rupees.format(item.quantity * item.unitPrice)}</b></div>)}</div></div>{draft.notes && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm"><b>Kitchen note:</b> {draft.notes}</div>}<div className="space-y-2 border-t border-dashed border-[#d7c9be] pt-4 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{rupees.format(draft.subtotal)}</span></div><div className="flex justify-between"><span>GST</span><span>{rupees.format(draft.tax)}</span></div>{draft.discount > 0 && <div className="flex justify-between text-emerald-700"><span>Discount</span><span>−{rupees.format(draft.discount)}</span></div>}<div className="flex justify-between pt-2 font-serif text-xl font-bold"><span>Total</span><span>{rupees.format(draft.total)}</span></div></div></div>}<DialogFooter className="flex-row justify-between sm:justify-between"><Button onClick={() => setDeleteOpen(true)} variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"><Trash2 /> Delete</Button><div className="flex gap-2">{editing ? <><Button onClick={() => { setDraft({ ...order, items: order.items?.map((item) => ({ ...item })) }); setEditing(false); }} variant="outline">Cancel</Button><Button onClick={save} disabled={saving || !editItems.length} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Save changes'}</Button></> : <Button onClick={() => setEditing(true)} className="bg-[#6d2416] hover:bg-[#55180f]"><Pencil /> Edit order</Button>}</div></DialogFooter><AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {draft.orderNumber}?</AlertDialogTitle><AlertDialogDescription>This removes the order and all its item details. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep order</AlertDialogCancel><AlertDialogAction onClick={async () => { if (await onDelete(order)) setDeleteOpen(false); }} className="bg-red-700 hover:bg-red-800"><Trash2 /> Delete order</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></DialogContent></Dialog>;
+  return <Dialog open={Boolean(order)} onOpenChange={onOpenChange}><DialogContent className="max-h-[94vh] overflow-y-auto rounded-[22px] sm:max-w-2xl"><DialogHeader><div className="flex items-start justify-between gap-4 pr-8"><div><DialogTitle className="font-serif text-2xl font-bold">{draft.orderNumber}</DialogTitle><DialogDescription>{new Date(draft.createdAt).toLocaleString('en-IN')} · {draft.orderType}</DialogDescription></div><span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass(draft.status)}`}>{draft.status}</span></div></DialogHeader>{editing ? <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><EditSelect label="Order type" value={draft.orderType} options={['Dine in', 'Takeaway', 'Delivery']} onChange={(orderType) => setDraft({ ...draft, orderType, tableNumber: orderType === 'Dine in' ? draft.tableNumber : null })} /><EditSelect label="Order status" value={draft.status} options={['new', 'preparing', 'ready', 'served', 'completed', 'cancelled']} onChange={(status) => setDraft({ ...draft, status })} />{draft.orderType === 'Dine in' && <label className="space-y-2 text-sm font-bold">Table number<Input value={draft.tableNumber ?? ''} onChange={(event) => setDraft({ ...draft, tableNumber: event.target.value })} /></label>}<label className="space-y-2 text-sm font-bold">Customer name<Input value={draft.customerName ?? ''} onChange={(event) => setDraft({ ...draft, customerName: event.target.value })} /></label><label className="space-y-2 text-sm font-bold">Customer phone<Input value={draft.customerPhone ?? ''} onChange={(event) => setDraft({ ...draft, customerPhone: event.target.value })} /></label>{draft.orderType === 'Delivery' && <label className="space-y-2 text-sm font-bold sm:col-span-2">Delivery address<Textarea value={draft.deliveryAddress ?? ''} onChange={(event) => setDraft({ ...draft, deliveryAddress: event.target.value })} /></label>}<EditSelect label="Payment status" value={draft.paymentStatus} options={['pending', 'paid', 'refunded']} onChange={(paymentStatus) => setDraft({ ...draft, paymentStatus })} /><EditSelect label="Payment method" value={draft.paymentMethod ?? 'Pay later'} options={['Pay later', 'Cash', 'UPI', 'Card']} onChange={(paymentMethod) => setDraft({ ...draft, paymentMethod: paymentMethod === 'Pay later' ? null : paymentMethod })} /><label className="space-y-2 text-sm font-bold">Discount (₹)<Input type="number" min="0" value={draft.discount} onChange={(event) => setDraft({ ...draft, discount: Math.max(0, Number(event.target.value)) })} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Kitchen notes<Textarea value={draft.notes ?? ''} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label></div><div><p className="mb-3 text-sm font-bold">Order items</p><div className="mb-3 flex gap-2"><Select value={addItemId} onValueChange={(value) => value && setAddItemId(String(value))}><SelectTrigger className="h-10 min-w-0 flex-1 bg-white"><SelectValue /></SelectTrigger><SelectContent>{catalog.map((dish) => <SelectItem key={dish.id} value={String(dish.id)}>{dish.name} · {rupees.format(dish.price)}</SelectItem>)}</SelectContent></Select><Button onClick={addDish} variant="outline"><Plus /> Add dish</Button></div><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex items-center gap-3 rounded-xl border border-[#e3d9cf] p-3"><div className="min-w-0 flex-1"><p className="truncate font-bold">{item.name}</p><p className="text-sm text-[#7d6a60]">{rupees.format(item.unitPrice)} each</p></div><div className="flex items-center gap-2"><Button onClick={() => changeItem(item.menuItemId, -1)} variant="outline" size="icon-sm"><Minus /></Button><b>{item.quantity}</b><Button onClick={() => changeItem(item.menuItemId, 1)} variant="outline" size="icon-sm"><Plus /></Button></div></div>)}</div></div></div> : <div className="space-y-5"><div className="grid gap-3 rounded-2xl bg-[#f6f1eb] p-4 text-sm sm:grid-cols-2"><Detail label="Guest" value={draft.customerName || 'Walk-in'} /><Detail label="Phone" value={draft.customerPhone || 'Not provided'} /><Detail label="Table / channel" value={draft.tableNumber ? `Table ${draft.tableNumber}` : draft.orderType} /><Detail label="Payment" value={draft.paymentStatus === 'paid' ? `${draft.paymentMethod || 'Paid'} · paid` : draft.paymentStatus} /><Detail label="Order status" value={draft.status} />{draft.deliveryAddress && <Detail label="Delivery address" value={draft.deliveryAddress} />}</div><div><h3 className="mb-3 font-serif text-lg font-bold">Items</h3><div className="space-y-2">{editItems.map((item) => <div key={item.menuItemId} className="flex justify-between rounded-xl border border-[#e3d9cf] px-3 py-2 text-sm"><span><b className="mr-2 text-[#6d2416]">{item.quantity}×</b>{item.name}</span><b>{rupees.format(item.quantity * item.unitPrice)}</b></div>)}</div></div>{draft.notes && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm"><b>Kitchen note:</b> {draft.notes}</div>}<div className="space-y-2 border-t border-dashed border-[#d7c9be] pt-4 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{rupees.format(draft.subtotal)}</span></div><div className="flex justify-between"><span>GST</span><span>{rupees.format(draft.tax)}</span></div>{draft.discount > 0 && <div className="flex justify-between text-emerald-700"><span>Discount</span><span>−{rupees.format(draft.discount)}</span></div>}<div className="flex justify-between pt-2 font-serif text-xl font-bold"><span>Total</span><span>{rupees.format(draft.total)}</span></div></div></div>}<DialogFooter className="flex-row justify-between sm:justify-between"><Button onClick={() => setDeleteOpen(true)} variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"><Trash2 /> Delete</Button><div className="flex gap-2">{editing ? <><Button onClick={() => { setDraft({ ...order, items: order.items?.map((item) => ({ ...item })) }); setEditing(false); }} variant="outline">Cancel</Button><Button onClick={save} disabled={saving || !editItems.length} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Save changes'}</Button></> : <Button onClick={() => setEditing(true)} className="bg-[#6d2416] hover:bg-[#55180f]"><Pencil /> Edit order</Button>}</div></DialogFooter><AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {draft.orderNumber}?</AlertDialogTitle><AlertDialogDescription>This removes the order and all its item details. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep order</AlertDialogCancel><AlertDialogAction onClick={async () => { if (await onDelete(order)) setDeleteOpen(false); }} className="bg-red-700 hover:bg-red-800"><Trash2 /> Delete order</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></DialogContent></Dialog>;
 }
 
 function EditSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
@@ -689,6 +733,84 @@ function EditSelect({ label, value, options, onChange }: { label: string; value:
 
 function Detail({ label, value }: { label: string; value: string }) {
   return <div><p className="text-xs font-bold uppercase tracking-wide text-[#947d71]">{label}</p><p className="mt-1 font-bold capitalize">{value}</p></div>;
+}
+
+function ContentManager({ items, settings, onItemsChange, onSettingsChange }: { items: MenuItem[]; settings: CustomerSettings; onItemsChange: (items: MenuItem[]) => void; onSettingsChange: (settings: CustomerSettings) => void }) {
+  const [editing, setEditing] = useState<MenuItem | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<MenuItem | null>(null);
+  const [draftSettings, setDraftSettings] = useState(settings);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsNotice, setSettingsNotice] = useState('');
+  useEffect(() => setDraftSettings(settings), [settings]);
+
+  async function saveItem(item: MenuItem) {
+    const response = await fetch('/api/menu', { method: creating ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+    const data = await response.json() as { item?: MenuItem; error?: string };
+    if (!response.ok || !data.item) throw new Error(data.error || 'Menu item could not be saved');
+    onItemsChange(creating ? [...items, data.item] : items.map((entry) => entry.id === data.item!.id ? data.item! : entry));
+    setEditing(null); setCreating(false);
+  }
+
+  async function removeItem(item: MenuItem) {
+    const response = await fetch('/api/menu', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+    if (response.ok) onItemsChange(items.map((entry) => entry.id === item.id ? { ...entry, active: false } : entry));
+    setDeleteCandidate(null);
+  }
+
+  async function restoreItem(item: MenuItem) {
+    const restored = { ...item, active: true };
+    const response = await fetch('/api/menu', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(restored) });
+    if (response.ok) onItemsChange(items.map((entry) => entry.id === item.id ? restored : entry));
+  }
+
+  async function saveCustomerSettings() {
+    setSavingSettings(true); setSettingsNotice('');
+    const response = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draftSettings) });
+    const data = await response.json() as { settings?: CustomerSettings; error?: string };
+    if (response.ok && data.settings) { onSettingsChange(data.settings); setSettingsNotice('Customer website updated'); }
+    else setSettingsNotice(data.error || 'Settings could not be saved');
+    setSavingSettings(false);
+  }
+
+  async function uploadBanner(file: File) {
+    const form = new FormData(); form.append('file', file); form.append('folder', 'banners');
+    const response = await fetch('/api/media', { method: 'POST', body: form });
+    const data = await response.json() as { url?: string; error?: string };
+    if (!response.ok || !data.url) { setSettingsNotice(data.error || 'Banner upload failed'); return; }
+    setDraftSettings((current) => ({ ...current, bannerImageUrl: data.url! }));
+  }
+
+  return <section className="p-4 pb-28 md:p-7 lg:pb-7"><div className="grid gap-6 2xl:grid-cols-[1.2fr_.8fr]"><div className="rounded-[24px] border border-[#ded8ce] bg-white p-5"><div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="font-serif text-2xl font-bold">Menu manager</h2><p className="text-sm text-[#7d6a60]">Add dishes, change prices and photos, or hide items from customers.</p></div><Button onClick={() => { setCreating(true); setEditing({ id: 0, name: '', note: '', price: 0, category: 'Rice & Paratha', veg: true, photo: 0, photoUrl: null, badge: '', active: true }); }} className="bg-[#6d2416] hover:bg-[#55180f]"><Plus /> Add menu item</Button></div><div className="space-y-3">{items.map((item) => <article key={item.id} className={`flex items-center gap-3 rounded-2xl border p-3 ${item.active === false ? 'border-[#e5ded7] bg-[#f5f1ed] opacity-70' : 'border-[#e3dbd3] bg-white'}`}><FoodThumb item={item} className="size-16 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="truncate font-bold">{item.name}</p>{item.active === false && <Badge variant="outline">Hidden</Badge>}</div><p className="mt-1 truncate text-sm text-[#7d6a60]">{item.category} · {rupees.format(item.price)}</p></div><div className="flex gap-1">{item.active === false ? <Button onClick={() => restoreItem(item)} variant="outline" size="sm">Restore</Button> : <><Button onClick={() => { setCreating(false); setEditing(item); }} variant="ghost" size="icon-sm" aria-label={`Edit ${item.name}`}><Pencil /></Button><Button onClick={() => setDeleteCandidate(item)} variant="ghost" size="icon-sm" className="text-red-700" aria-label={`Hide ${item.name}`}><Trash2 /></Button></>}</div></article>)}</div></div><div className="h-fit space-y-6"><div className="rounded-[24px] border border-[#ded8ce] bg-white p-5"><div className="flex items-start gap-3"><span className="grid size-11 place-items-center rounded-xl bg-[#fff0d7] text-[#8a420d]"><Megaphone /></span><div><h2 className="font-serif text-xl font-bold">Offer banner</h2><p className="text-sm text-[#7d6a60]">Show a promotion above the customer menu.</p></div><Switch checked={draftSettings.offerEnabled} onCheckedChange={(checked) => setDraftSettings({ ...draftSettings, offerEnabled: checked })} className="ml-auto" /></div><div className="mt-5 space-y-4"><label className="block space-y-2 text-sm font-bold">Offer title<Input value={draftSettings.offerTitle} onChange={(event) => setDraftSettings({ ...draftSettings, offerTitle: event.target.value })} /></label><label className="block space-y-2 text-sm font-bold">Offer details<Textarea value={draftSettings.offerText} onChange={(event) => setDraftSettings({ ...draftSettings, offerText: event.target.value })} /></label><label className="block space-y-2 text-sm font-bold">Banner photo<input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadBanner(file); }} className="block w-full rounded-xl border border-[#ded8ce] p-2 text-sm" /></label>{draftSettings.bannerImageUrl && <div className="h-28 rounded-2xl bg-cover bg-center" style={{ backgroundImage: `url('${draftSettings.bannerImageUrl}')` }} />}</div></div><div className="rounded-[24px] border border-[#ded8ce] bg-white p-5"><div className="flex items-start gap-3"><span className="grid size-11 place-items-center rounded-xl bg-[#f6eee8] text-[#6d2416]"><LinkIcon /></span><div><h2 className="font-serif text-xl font-bold">Social & location</h2><p className="text-sm text-[#7d6a60]">Links appear in the customer website footer.</p></div></div><div className="mt-5 space-y-3"><SettingsInput label="Instagram URL" value={draftSettings.instagramUrl} onChange={(value) => setDraftSettings({ ...draftSettings, instagramUrl: value })} /><SettingsInput label="Facebook URL" value={draftSettings.facebookUrl} onChange={(value) => setDraftSettings({ ...draftSettings, facebookUrl: value })} /><SettingsInput label="YouTube URL" value={draftSettings.youtubeUrl} onChange={(value) => setDraftSettings({ ...draftSettings, youtubeUrl: value })} /><SettingsInput label="WhatsApp number" value={draftSettings.whatsappNumber} onChange={(value) => setDraftSettings({ ...draftSettings, whatsappNumber: value })} /><SettingsInput label="Restaurant address" value={draftSettings.restaurantAddress} onChange={(value) => setDraftSettings({ ...draftSettings, restaurantAddress: value })} /><SettingsInput label="Google Maps URL" value={draftSettings.googleMapsUrl} onChange={(value) => setDraftSettings({ ...draftSettings, googleMapsUrl: value })} /></div><Button onClick={saveCustomerSettings} disabled={savingSettings} className="mt-5 w-full bg-[#6d2416] hover:bg-[#55180f]">{savingSettings ? 'Saving…' : 'Save customer website'}</Button>{settingsNotice && <p className="mt-3 text-center text-sm font-bold text-[#6d2416]">{settingsNotice}</p>}</div></div></div><MenuItemDialog item={editing} onOpenChange={(open) => { if (!open) { setEditing(null); setCreating(false); } }} onSave={saveItem} /><AlertDialog open={Boolean(deleteCandidate)} onOpenChange={(open) => { if (!open) setDeleteCandidate(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Hide {deleteCandidate?.name}?</AlertDialogTitle><AlertDialogDescription>This dish will disappear from the customer menu and POS. You can restore it later.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep item</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleteCandidate) void removeItem(deleteCandidate); }} className="bg-red-700 hover:bg-red-800">Hide item</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></section>;
+}
+
+function SettingsInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="block space-y-2 text-sm font-bold">{label}<Input value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function MenuItemDialog({ item, onOpenChange, onSave }: { item: MenuItem | null; onOpenChange: (open: boolean) => void; onSave: (item: MenuItem) => Promise<void> }) {
+  const [draft, setDraft] = useState<MenuItem | null>(item);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => { setDraft(item ? { ...item } : null); setError(''); }, [item]);
+  if (!draft) return null;
+  async function uploadPhoto(file: File) {
+    setUploading(true); setError('');
+    const form = new FormData(); form.append('file', file); form.append('folder', 'menu');
+    const response = await fetch('/api/media', { method: 'POST', body: form });
+    const data = await response.json() as { url?: string; error?: string };
+    if (!response.ok || !data.url) setError(data.error || 'Photo upload failed'); else setDraft((current) => current ? { ...current, photoUrl: data.url } : current);
+    setUploading(false);
+  }
+  async function submit() {
+    if (!draft) return;
+    const currentDraft = draft;
+    setSaving(true); setError('');
+    try { await onSave(currentDraft); } catch (err) { setError(err instanceof Error ? err.message : 'Menu item could not be saved'); }
+    finally { setSaving(false); }
+  }
+  return <Dialog open={Boolean(item)} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] overflow-y-auto rounded-[22px] sm:max-w-lg"><DialogHeader><DialogTitle className="font-serif text-2xl font-bold">{draft.id ? 'Edit menu item' : 'Add menu item'}</DialogTitle><DialogDescription>Changes appear in both the staff POS and customer menu.</DialogDescription></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-bold sm:col-span-2">Dish name<Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Description<Textarea value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label><label className="space-y-2 text-sm font-bold">Price (₹)<Input type="number" min="1" value={draft.price} onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })} /></label><label className="space-y-2 text-sm font-bold">Category<Input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label className="space-y-2 text-sm font-bold sm:col-span-2">Badge <span className="font-normal text-[#8b776d]">(optional)</span><Input value={draft.badge ?? ''} onChange={(event) => setDraft({ ...draft, badge: event.target.value })} placeholder="Bestseller, New, Special…" /></label><div className="flex items-center justify-between rounded-xl border border-[#ded8ce] p-3 text-sm font-bold"><span>Vegetarian</span><Switch checked={draft.veg} onCheckedChange={(checked) => setDraft({ ...draft, veg: checked })} /></div><div className="flex items-center justify-between rounded-xl border border-[#ded8ce] p-3 text-sm font-bold"><span>Visible on menu</span><Switch checked={draft.active !== false} onCheckedChange={(checked) => setDraft({ ...draft, active: checked })} /></div><label className="space-y-2 text-sm font-bold sm:col-span-2">Dish photo<input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); }} className="block w-full rounded-xl border border-[#ded8ce] p-2 text-sm" /></label>{draft.photoUrl && <div className="sm:col-span-2"><FoodThumb item={draft} className="h-40 w-full rounded-2xl" /></div>}{uploading && <p className="text-sm font-bold text-[#6d2416] sm:col-span-2">Uploading photo…</p>}{error && <p className="text-sm font-bold text-red-700 sm:col-span-2">{error}</p>}</div><DialogFooter><Button onClick={submit} disabled={saving || uploading || !draft.name.trim() || !draft.note.trim() || draft.price < 1} className="bg-[#6d2416] hover:bg-[#55180f]">{saving ? 'Saving…' : 'Save menu item'}</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function InventoryView({ stock, onAdjust }: { stock: StockItem[]; onAdjust: (item: StockItem, amount: number) => void }) {
