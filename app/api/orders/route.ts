@@ -25,26 +25,47 @@ type OrderUpdateInput = {
   items?: OrderItemInput[];
 };
 
-const allowedStatuses = ['new', 'preparing', 'ready', 'served', 'completed', 'cancelled'];
+const allowedStatuses = [
+  'new',
+  'preparing',
+  'ready',
+  'served',
+  'completed',
+  'cancelled',
+];
 const allowedPaymentStatuses = ['pending', 'paid', 'refunded'];
 const allowedOrderTypes = ['Dine in', 'Takeaway', 'Delivery'];
 
 function validItems(items: OrderItemInput[] | undefined) {
   return (items ?? []).filter(
-    (item) => Number.isInteger(item.menuItemId) && item.quantity > 0 && item.unitPrice >= 0 && item.name.trim(),
+    (item) =>
+      Number.isInteger(item.menuItemId) &&
+      item.quantity > 0 &&
+      item.unitPrice >= 0 &&
+      item.name.trim(),
   );
 }
 
 function totals(items: OrderItemInput[], requestedDiscount = 0) {
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0,
+  );
   const tax = Math.round(subtotal * 0.05);
-  const discount = Math.max(0, Math.min(Number(requestedDiscount) || 0, subtotal));
+  const discount = Math.max(
+    0,
+    Math.min(Number(requestedDiscount) || 0, subtotal),
+  );
   return { subtotal, tax, discount, total: subtotal + tax - discount };
 }
 
 export async function GET(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!isStaffRequest(request))
+      return Response.json(
+        { error: 'Staff sign-in required' },
+        { status: 401 },
+      );
     const db = getD1Binding();
     const [{ results: orderRows }, { results: itemRows }] = await db.batch([
       db.prepare(
@@ -77,7 +98,13 @@ export async function GET(request: Request) {
     }));
     return Response.json({ orders });
   } catch (error) {
-    return Response.json({ orders: [], error: error instanceof Error ? error.message : 'Unable to load orders' }, { status: 503 });
+    return Response.json(
+      {
+        orders: [],
+        error: error instanceof Error ? error.message : 'Unable to load orders',
+      },
+      { status: 503 },
+    );
   }
 }
 
@@ -85,8 +112,13 @@ export async function POST(request: Request) {
   try {
     const input = (await request.json()) as OrderUpdateInput;
     const items = validItems(input.items);
-    if (!items.length) return Response.json({ error: 'Add at least one item' }, { status: 400 });
-    if (!allowedOrderTypes.includes(input.orderType ?? '')) return Response.json({ error: 'Choose a valid order type' }, { status: 400 });
+    if (!items.length)
+      return Response.json({ error: 'Add at least one item' }, { status: 400 });
+    if (!allowedOrderTypes.includes(input.orderType ?? ''))
+      return Response.json(
+        { error: 'Choose a valid order type' },
+        { status: 400 },
+      );
 
     const amount = totals(items, input.discount);
     const now = Date.now();
@@ -97,122 +129,187 @@ export async function POST(request: Request) {
     const db = getD1Binding();
 
     await db.batch([
-      db.prepare(
-        `INSERT INTO orders (
+      db
+        .prepare(
+          `INSERT INTO orders (
           id, order_number, order_type, table_number, customer_name, customer_phone,
           delivery_address, latitude, longitude, status, payment_status, payment_method,
           notes, subtotal, tax, discount, total, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        id,
-        orderNumber,
-        input.orderType,
-        input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
-        input.customerName?.trim() || null,
-        customerPhone,
-        input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
-        input.latitude?.trim() || null,
-        input.longitude?.trim() || null,
-        'new',
-        paymentMethod ? 'paid' : 'pending',
-        paymentMethod,
-        input.notes?.trim() || null,
-        amount.subtotal,
-        amount.tax,
-        amount.discount,
-        amount.total,
-        now,
-        now,
-      ),
-      ...items.map((item) =>
-        db.prepare(
-          `INSERT INTO order_items (order_id, menu_item_id, name, quantity, unit_price, line_total)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-        ).bind(id, item.menuItemId, item.name.trim(), item.quantity, item.unitPrice, item.quantity * item.unitPrice),
-      ),
-    ]);
-    return Response.json({
-      order: {
-        id,
-        orderNumber,
-        orderType: input.orderType,
-        tableNumber: input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
-        customerName: input.customerName?.trim() || null,
-        customerPhone,
-        deliveryAddress: input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
-        latitude: input.latitude?.trim() || null,
-        longitude: input.longitude?.trim() || null,
-        status: 'new',
-        paymentStatus: paymentMethod ? 'paid' : 'pending',
-        paymentMethod,
-        notes: input.notes?.trim() || null,
-        ...amount,
-        createdAt: now,
-        items,
-      },
-    }, { status: 201 });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Unable to create order' }, { status: 500 });
-  }
-}
-
-export async function PATCH(request: Request) {
-  try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
-    const input = (await request.json()) as OrderUpdateInput;
-    if (!input.id) return Response.json({ error: 'Order id is required' }, { status: 400 });
-    const db = getD1Binding();
-
-    if (input.items) {
-      const items = validItems(input.items);
-      if (!items.length || !allowedOrderTypes.includes(input.orderType ?? '') || !allowedStatuses.includes(input.status ?? '') || !allowedPaymentStatuses.includes(input.paymentStatus ?? '')) {
-        return Response.json({ error: 'Invalid order details' }, { status: 400 });
-      }
-      const amount = totals(items, input.discount);
-      const now = Date.now();
-      const statements = [
-        db.prepare(
-          `UPDATE orders SET order_type = ?, table_number = ?, customer_name = ?, customer_phone = ?,
-            delivery_address = ?, latitude = ?, longitude = ?, status = ?, payment_status = ?,
-            payment_method = ?, notes = ?, subtotal = ?, tax = ?, discount = ?, total = ?,
-            updated_at = ? WHERE id = ?`,
-        ).bind(
+        )
+        .bind(
+          id,
+          orderNumber,
           input.orderType,
-          input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
+          input.orderType === 'Dine in'
+            ? input.tableNumber?.trim() || null
+            : null,
           input.customerName?.trim() || null,
-          normalizePhone(input.customerPhone ?? '') || null,
-          input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+          customerPhone,
+          input.orderType === 'Delivery'
+            ? input.deliveryAddress?.trim() || null
+            : null,
           input.latitude?.trim() || null,
           input.longitude?.trim() || null,
-          input.status,
-          input.paymentStatus,
-          input.paymentMethod?.trim() || null,
+          'new',
+          paymentMethod ? 'paid' : 'pending',
+          paymentMethod,
           input.notes?.trim() || null,
           amount.subtotal,
           amount.tax,
           amount.discount,
           amount.total,
           now,
-          input.id,
+          now,
         ),
+      ...items.map((item) =>
+        db
+          .prepare(
+            `INSERT INTO order_items (order_id, menu_item_id, name, quantity, unit_price, line_total)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            id,
+            item.menuItemId,
+            item.name.trim(),
+            item.quantity,
+            item.unitPrice,
+            item.quantity * item.unitPrice,
+          ),
+      ),
+    ]);
+    return Response.json(
+      {
+        order: {
+          id,
+          orderNumber,
+          orderType: input.orderType,
+          tableNumber:
+            input.orderType === 'Dine in'
+              ? input.tableNumber?.trim() || null
+              : null,
+          customerName: input.customerName?.trim() || null,
+          customerPhone,
+          deliveryAddress:
+            input.orderType === 'Delivery'
+              ? input.deliveryAddress?.trim() || null
+              : null,
+          latitude: input.latitude?.trim() || null,
+          longitude: input.longitude?.trim() || null,
+          status: 'new',
+          paymentStatus: paymentMethod ? 'paid' : 'pending',
+          paymentMethod,
+          notes: input.notes?.trim() || null,
+          ...amount,
+          createdAt: now,
+          items,
+        },
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Unable to create order',
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    if (!isStaffRequest(request))
+      return Response.json(
+        { error: 'Staff sign-in required' },
+        { status: 401 },
+      );
+    const input = (await request.json()) as OrderUpdateInput;
+    if (!input.id)
+      return Response.json({ error: 'Order id is required' }, { status: 400 });
+    const db = getD1Binding();
+
+    if (input.items) {
+      const items = validItems(input.items);
+      if (
+        !items.length ||
+        !allowedOrderTypes.includes(input.orderType ?? '') ||
+        !allowedStatuses.includes(input.status ?? '') ||
+        !allowedPaymentStatuses.includes(input.paymentStatus ?? '')
+      ) {
+        return Response.json(
+          { error: 'Invalid order details' },
+          { status: 400 },
+        );
+      }
+      const amount = totals(items, input.discount);
+      const now = Date.now();
+      const statements = [
+        db
+          .prepare(
+            `UPDATE orders SET order_type = ?, table_number = ?, customer_name = ?, customer_phone = ?,
+            delivery_address = ?, latitude = ?, longitude = ?, status = ?, payment_status = ?,
+            payment_method = ?, notes = ?, subtotal = ?, tax = ?, discount = ?, total = ?,
+            updated_at = ? WHERE id = ?`,
+          )
+          .bind(
+            input.orderType,
+            input.orderType === 'Dine in'
+              ? input.tableNumber?.trim() || null
+              : null,
+            input.customerName?.trim() || null,
+            normalizePhone(input.customerPhone ?? '') || null,
+            input.orderType === 'Delivery'
+              ? input.deliveryAddress?.trim() || null
+              : null,
+            input.latitude?.trim() || null,
+            input.longitude?.trim() || null,
+            input.status,
+            input.paymentStatus,
+            input.paymentMethod?.trim() || null,
+            input.notes?.trim() || null,
+            amount.subtotal,
+            amount.tax,
+            amount.discount,
+            amount.total,
+            now,
+            input.id,
+          ),
         db.prepare('DELETE FROM order_items WHERE order_id = ?').bind(input.id),
         ...items.map((item) =>
-          db.prepare(
-            `INSERT INTO order_items (order_id, menu_item_id, name, quantity, unit_price, line_total)
+          db
+            .prepare(
+              `INSERT INTO order_items (order_id, menu_item_id, name, quantity, unit_price, line_total)
              VALUES (?, ?, ?, ?, ?, ?)`,
-          ).bind(input.id, item.menuItemId, item.name.trim(), item.quantity, item.unitPrice, item.quantity * item.unitPrice),
+            )
+            .bind(
+              input.id,
+              item.menuItemId,
+              item.name.trim(),
+              item.quantity,
+              item.unitPrice,
+              item.quantity * item.unitPrice,
+            ),
         ),
       ];
       const results = await db.batch(statements);
-      if (!results[0].meta.changes) return Response.json({ error: 'Order not found' }, { status: 404 });
+      if (!results[0].meta.changes)
+        return Response.json({ error: 'Order not found' }, { status: 404 });
       return Response.json({
         order: {
           id: input.id,
           orderType: input.orderType,
-          tableNumber: input.orderType === 'Dine in' ? input.tableNumber?.trim() || null : null,
+          tableNumber:
+            input.orderType === 'Dine in'
+              ? input.tableNumber?.trim() || null
+              : null,
           customerName: input.customerName?.trim() || null,
           customerPhone: normalizePhone(input.customerPhone ?? '') || null,
-          deliveryAddress: input.orderType === 'Delivery' ? input.deliveryAddress?.trim() || null : null,
+          deliveryAddress:
+            input.orderType === 'Delivery'
+              ? input.deliveryAddress?.trim() || null
+              : null,
           latitude: input.latitude?.trim() || null,
           longitude: input.longitude?.trim() || null,
           status: input.status,
@@ -225,32 +322,82 @@ export async function PATCH(request: Request) {
       });
     }
 
-    if (!input.status || !allowedStatuses.includes(input.status) || (input.paymentStatus && !allowedPaymentStatuses.includes(input.paymentStatus))) {
+    if (
+      !input.status ||
+      !allowedStatuses.includes(input.status) ||
+      (input.paymentStatus &&
+        !allowedPaymentStatuses.includes(input.paymentStatus))
+    ) {
       return Response.json({ error: 'Invalid order update' }, { status: 400 });
     }
-    const result = await db.prepare(
-      'UPDATE orders SET status = ?, payment_status = COALESCE(?, payment_status), updated_at = ? WHERE id = ?',
-    ).bind(input.status, input.paymentStatus ?? null, Date.now(), input.id).run();
-    if (!result.meta.changes) return Response.json({ error: 'Order not found' }, { status: 404 });
-    return Response.json({ id: input.id, status: input.status, paymentStatus: input.paymentStatus });
+    const result = await db
+      .prepare(
+        'UPDATE orders SET status = ?, payment_status = COALESCE(?, payment_status), updated_at = ? WHERE id = ?',
+      )
+      .bind(input.status, input.paymentStatus ?? null, Date.now(), input.id)
+      .run();
+    if (!result.meta.changes)
+      return Response.json({ error: 'Order not found' }, { status: 404 });
+    return Response.json({
+      id: input.id,
+      status: input.status,
+      paymentStatus: input.paymentStatus,
+    });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Unable to update order' }, { status: 500 });
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Unable to update order',
+      },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
-    const input = (await request.json()) as { id?: string };
-    if (!input.id) return Response.json({ error: 'Order id is required' }, { status: 400 });
+    if (!isStaffRequest(request))
+      return Response.json(
+        { error: 'Staff sign-in required' },
+        { status: 401 },
+      );
+    const input = (await request.json()) as { id?: string; ids?: string[] };
+    const ids = [
+      ...new Set([
+        ...(Array.isArray(input.ids) ? input.ids : []),
+        ...(input.id ? [input.id] : []),
+      ]),
+    ]
+      .filter(
+        (id): id is string =>
+          typeof id === 'string' && id.length > 0 && id.length <= 80,
+      )
+      .slice(0, 100);
+    if (!ids.length)
+      return Response.json(
+        { error: 'Select at least one order' },
+        { status: 400 },
+      );
     const db = getD1Binding();
+    const placeholders = ids.map(() => '?').join(', ');
     const results = await db.batch([
-      db.prepare('DELETE FROM order_items WHERE order_id = ?').bind(input.id),
-      db.prepare('DELETE FROM orders WHERE id = ?').bind(input.id),
+      db
+        .prepare(`DELETE FROM order_items WHERE order_id IN (${placeholders})`)
+        .bind(...ids),
+      db
+        .prepare(`DELETE FROM orders WHERE id IN (${placeholders})`)
+        .bind(...ids),
     ]);
-    if (!results[1].meta.changes) return Response.json({ error: 'Order not found' }, { status: 404 });
-    return Response.json({ id: input.id, deleted: true });
+    if (!results[1].meta.changes)
+      return Response.json({ error: 'Orders not found' }, { status: 404 });
+    return Response.json({ ids, deleted: results[1].meta.changes });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Unable to delete order' }, { status: 500 });
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Unable to delete order',
+      },
+      { status: 500 },
+    );
   }
 }
