@@ -1,5 +1,6 @@
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
+import { fileURLToPath } from 'node:url';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
 import hostingConfig from './.openai/hosting.json';
@@ -11,6 +12,11 @@ const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
+const isVercelBuild =
+  process.env.VERCEL === '1' || process.env.NITRO_PRESET === 'vercel';
+const vercelCloudflareWorkersShim = fileURLToPath(
+  new URL('./lib/vercel-cloudflare-workers.ts', import.meta.url),
+);
 
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
@@ -41,21 +47,28 @@ export default defineConfig(async () => {
   process.env.WRANGLER_LOG_PATH ??= '.wrangler/logs';
   process.env.MINIFLARE_REGISTRY_PATH ??= '.wrangler/registry';
 
-  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
-  const { cloudflare } = await import('@cloudflare/vite-plugin');
+  const platformPlugins = isVercelBuild
+    ? (await import('nitro/vite')).nitro()
+    : [
+        sites(),
+        (await import('@cloudflare/vite-plugin')).cloudflare({
+          viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
+          config: localBindingConfig,
+        }),
+      ];
 
   return {
-    css: { postcss: { plugins: [tailwindcss()] } },
+    resolve: isVercelBuild
+      ? { alias: { 'cloudflare:workers': vercelCloudflareWorkersShim } }
+      : undefined,
+    css: isVercelBuild ? undefined : { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
+      ...(isVercelBuild ? [(await import('@tailwindcss/vite')).default()] : []),
       vinext(),
-      sites(),
-      cloudflare({
-        viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
-        config: localBindingConfig,
-      }),
+      ...platformPlugins,
     ],
   };
 });
