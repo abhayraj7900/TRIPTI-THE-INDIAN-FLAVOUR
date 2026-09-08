@@ -669,8 +669,33 @@ export function RestaurantSystem() {
     setOrders((current) =>
       current.filter((order) => !selectedIds.has(order.id)),
     );
+    setReviews((current) =>
+      current.filter((review) => !selectedIds.has(review.orderId)),
+    );
     setNotice(
       `${selectedOrders.length} order${selectedOrders.length === 1 ? '' : 's'} deleted`,
+    );
+    return true;
+  }
+
+  async function deleteReviews(selectedReviews: FeedbackRecord[]) {
+    const orderIds = selectedReviews.map((review) => review.orderId);
+    const response = await fetch('/api/feedback', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds }),
+    });
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setNotice(data.error || 'Selected reviews could not be deleted');
+      return false;
+    }
+    const selectedIds = new Set(orderIds);
+    setReviews((current) =>
+      current.filter((review) => !selectedIds.has(review.orderId)),
+    );
+    setNotice(
+      `${selectedReviews.length} review${selectedReviews.length === 1 ? '' : 's'} deleted`,
     );
     return true;
   }
@@ -708,14 +733,14 @@ export function RestaurantSystem() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f2ec] text-[#201b18]">
+    <main className="min-h-screen bg-[#f5f2ec] text-[#201b18] lg:h-dvh lg:overflow-hidden">
       {notice && (
         <output className="fixed right-4 top-4 z-[80] flex items-center gap-2 rounded-xl bg-[#201b18] px-4 py-3 text-sm font-bold text-white shadow-2xl">
           <Check className="size-4 text-emerald-400" /> {notice}
         </output>
       )}
-      <div className="grid min-h-screen lg:grid-cols-[236px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-white/10 bg-[#48180f] px-4 py-5 text-white lg:flex lg:flex-col">
+      <div className="grid min-h-screen lg:h-dvh lg:min-h-0 lg:grid-cols-[236px_minmax(0,1fr)]">
+        <aside className="hidden border-r border-white/10 bg-[#48180f] px-4 py-5 text-white lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto [scrollbar-width:thin]">
           <Brand />
           <nav className="space-y-1" aria-label="Restaurant management">
             {navigation.map(({ id, label, icon: Icon }) => (
@@ -754,8 +779,8 @@ export function RestaurantSystem() {
           </div>
         </aside>
 
-        <section className="min-w-0">
-          <header className="flex h-[76px] items-center justify-between border-b border-[#ded8ce] bg-[#faf8f4] px-4 md:px-7">
+        <section className="min-w-0 lg:h-dvh lg:overflow-y-auto [scrollbar-width:thin]">
+          <header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-[#ded8ce] bg-[#faf8f4] px-4 md:px-7">
             <div>
               <p className="text-xs font-bold uppercase tracking-[.16em] text-[#9a6d5b]">
                 {headings[activeView].eyebrow}
@@ -837,8 +862,12 @@ export function RestaurantSystem() {
               onAdd={addStockItem}
             />
           )}
-          {activeView === 'reviews' && <ReviewsView reviews={reviews} />}
-          {activeView === 'reports' && <ReportsView orders={orders} />}
+          {activeView === 'reviews' && (
+            <ReviewsView reviews={reviews} onDeleteMany={deleteReviews} />
+          )}
+          {activeView === 'reports' && (
+            <ReportsView orders={orders} onDeleteMany={deleteOrders} />
+          )}
           {activeView === 'content' && (
             <ContentManager
               items={catalog}
@@ -851,14 +880,22 @@ export function RestaurantSystem() {
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-3 z-40 flex justify-around rounded-2xl border border-[#ded8ce] bg-white/95 p-1.5 shadow-2xl backdrop-blur lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-40 flex justify-start gap-1 overflow-x-auto rounded-2xl border border-[#ded8ce] bg-white/95 p-1.5 shadow-2xl backdrop-blur [scrollbar-width:none] lg:hidden"
         aria-label="Mobile management"
       >
+        <button
+          onClick={() => setActiveView('content')}
+          className="flex min-w-12 shrink-0 flex-col items-center gap-1 rounded-xl bg-[#f6a622] px-2 py-2 text-[10px] font-bold text-[#48180f]"
+          aria-label="Add menu item"
+        >
+          <Plus className="size-[18px]" />
+          <span>Add</span>
+        </button>
         {navigation.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveView(id)}
-            className={`flex min-w-12 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold ${activeView === id ? 'bg-[#6d2416] text-white' : 'text-[#806b61]'}`}
+            className={`flex min-w-12 shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold ${activeView === id ? 'bg-[#6d2416] text-white' : 'text-[#806b61]'}`}
           >
             <Icon className="size-[18px]" />
             <span className="hidden sm:block">{label}</span>
@@ -3451,7 +3488,22 @@ function AddInventoryDialog({
   );
 }
 
-function ReviewsView({ reviews }: { reviews: FeedbackRecord[] }) {
+function ReviewsView({
+  reviews,
+  onDeleteMany,
+}: {
+  reviews: FeedbackRecord[];
+  onDeleteMany: (reviews: FeedbackRecord[]) => Promise<boolean>;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<FeedbackRecord[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const selectedReviews = reviews.filter((review) =>
+    selectedIds.has(review.orderId),
+  );
+  const allSelected =
+    reviews.length > 0 &&
+    reviews.every((review) => selectedIds.has(review.orderId));
   const averageFood = reviews.length
     ? reviews.reduce((sum, review) => sum + review.foodRating, 0) /
       reviews.length
@@ -3460,6 +3512,40 @@ function ReviewsView({ reviews }: { reviews: FeedbackRecord[] }) {
     ? reviews.reduce((sum, review) => sum + review.serviceRating, 0) /
       reviews.length
     : 0;
+
+  function toggleReview(orderId: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(orderId);
+      else next.delete(orderId);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(
+      allSelected
+        ? new Set()
+        : new Set(reviews.map((review) => review.orderId)),
+    );
+  }
+
+  async function removeReviews() {
+    if (!pendingDelete.length) return;
+    setDeleting(true);
+    const removed = await onDeleteMany(pendingDelete);
+    setDeleting(false);
+    if (removed) {
+      const removedIds = new Set(pendingDelete.map((review) => review.orderId));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const id of removedIds) next.delete(id);
+        return next;
+      });
+      setPendingDelete([]);
+    }
+  }
+
   return (
     <section className="p-4 pb-28 md:p-7 lg:pb-7">
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
@@ -3483,45 +3569,132 @@ function ReviewsView({ reviews }: { reviews: FeedbackRecord[] }) {
         />
       </div>
       {reviews.length ? (
-        <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-          {reviews.map((review) => (
-            <article
-              key={review.orderId}
-              className="rounded-[22px] border border-[#ded8ce] bg-white p-5 shadow-[0_8px_30px_rgba(66,39,25,.06)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-serif text-xl font-bold">
-                    {review.tableNumber
-                      ? `Table ${review.tableNumber}`
-                      : review.customerName || review.orderType}
-                  </p>
-                  <p className="mt-1 text-sm font-bold text-[#8d7569]">
-                    {review.orderNumber} · {review.orderType}
-                  </p>
-                </div>
-                <span className="rounded-full bg-[#fff0d4] px-3 py-1 text-xs font-bold text-[#7c310e]">
-                  {new Date(review.updatedAt).toLocaleDateString('en-IN')}
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <RatingSummary label="Food" value={review.foodRating} />
-                <RatingSummary label="Service" value={review.serviceRating} />
-              </div>
-              {review.notes ? (
-                <blockquote className="mt-4 rounded-2xl bg-[#f7f2ec] p-4 text-sm leading-6 text-[#604d44]">
-                  “{review.notes}”
-                </blockquote>
-              ) : (
-                <p className="mt-4 text-sm text-[#8a766c]">No written note.</p>
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-[#ded8ce] bg-white p-3 shadow-sm">
+            <label className="flex items-center gap-3 text-sm font-bold">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleAll}
+                aria-label="Select all reviews"
+              />
+              {selectedReviews.length
+                ? `${selectedReviews.length} selected`
+                : 'Select reviews'}
+            </label>
+            <div className="flex gap-2">
+              {selectedReviews.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
               )}
-              <p className="mt-4 border-t border-dashed border-[#ded3c8] pt-3 text-xs text-[#8a766c]">
-                {review.customerName || 'Restaurant guest'} ·{' '}
-                {review.customerPhone}
-              </p>
-            </article>
-          ))}
-        </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!selectedReviews.length}
+                onClick={() => setPendingDelete(selectedReviews)}
+                className="border-red-200 text-red-700 hover:bg-red-50"
+              >
+                <Trash2 /> Delete selected ({selectedReviews.length})
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            {reviews.map((review) => (
+              <article
+                key={review.orderId}
+                className={`rounded-[22px] border bg-white p-5 shadow-[0_8px_30px_rgba(66,39,25,.06)] ${selectedIds.has(review.orderId) ? 'border-[#9b3b28] ring-2 ring-[#9b3b28]/10' : 'border-[#ded8ce]'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Checkbox
+                      checked={selectedIds.has(review.orderId)}
+                      onCheckedChange={(checked) =>
+                        toggleReview(review.orderId, checked === true)
+                      }
+                      aria-label={`Select review for ${review.orderNumber}`}
+                    />
+                    <div>
+                      <p className="font-serif text-xl font-bold">
+                        {review.tableNumber
+                          ? `Table ${review.tableNumber}`
+                          : review.customerName || review.orderType}
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-[#8d7569]">
+                        {review.orderNumber} · {review.orderType}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="rounded-full bg-[#fff0d4] px-3 py-1 text-xs font-bold text-[#7c310e]">
+                      {new Date(review.updatedAt).toLocaleDateString('en-IN')}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setPendingDelete([review])}
+                      className="text-red-700 hover:bg-red-50 hover:text-red-800"
+                      aria-label={`Delete review for ${review.orderNumber}`}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <RatingSummary label="Food" value={review.foodRating} />
+                  <RatingSummary label="Service" value={review.serviceRating} />
+                </div>
+                {review.notes ? (
+                  <blockquote className="mt-4 rounded-2xl bg-[#f7f2ec] p-4 text-sm leading-6 text-[#604d44]">
+                    “{review.notes}”
+                  </blockquote>
+                ) : (
+                  <p className="mt-4 text-sm text-[#8a766c]">
+                    No written note.
+                  </p>
+                )}
+                <p className="mt-4 border-t border-dashed border-[#ded3c8] pt-3 text-xs text-[#8a766c]">
+                  {review.customerName || 'Restaurant guest'} ·{' '}
+                  {review.customerPhone}
+                </p>
+              </article>
+            ))}
+          </div>
+          <AlertDialog
+            open={pendingDelete.length > 0}
+            onOpenChange={(open) => {
+              if (!open && !deleting) setPendingDelete([]);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {pendingDelete.length} review
+                  {pendingDelete.length === 1 ? '' : 's'}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  The selected food rating, service rating and customer note
+                  will be permanently removed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>
+                  Keep reviews
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={removeReviews}
+                  disabled={deleting}
+                  className="bg-red-700 hover:bg-red-800"
+                >
+                  <Trash2 /> {deleting ? 'Deleting…' : 'Delete reviews'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       ) : (
         <div className="grid min-h-72 place-items-center rounded-[24px] border border-dashed border-[#d3c6bb] bg-white text-center">
           <div>
@@ -3561,9 +3734,57 @@ function RatingSummary({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ReportsView({ orders }: { orders: OrderRecord[] }) {
+function ReportsView({
+  orders,
+  onDeleteMany,
+}: {
+  orders: OrderRecord[];
+  onDeleteMany: (orders: OrderRecord[]) => Promise<boolean>;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<OrderRecord[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const reportOrders = orders.slice(0, 100);
+  const selectedOrders = reportOrders.filter((order) =>
+    selectedIds.has(order.id),
+  );
+  const allSelected =
+    reportOrders.length > 0 &&
+    reportOrders.every((order) => selectedIds.has(order.id));
   const currentSales = orders.reduce((sum, order) => sum + order.total, 0);
   const bars = [48, 58, 44, 72, 66, 86, 78];
+
+  function toggleOrder(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(reportOrders.map((order) => order.id)),
+    );
+  }
+
+  async function removeReportOrders() {
+    if (!pendingDelete.length) return;
+    setDeleting(true);
+    const removed = await onDeleteMany(pendingDelete);
+    setDeleting(false);
+    if (removed) {
+      const removedIds = new Set(pendingDelete.map((order) => order.id));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const id of removedIds) next.delete(id);
+        return next;
+      });
+      setPendingDelete([]);
+    }
+  }
+
   return (
     <section className="p-4 pb-28 md:p-7 lg:pb-7">
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -3696,6 +3917,142 @@ function ReportsView({ orders }: { orders: OrderRecord[] }) {
           </div>
         </div>
       </div>
+      <div className="mt-5 overflow-hidden rounded-[22px] border border-[#ded8ce] bg-white p-4 shadow-sm md:p-5">
+        <div className="mb-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div>
+            <h2 className="font-serif text-xl font-bold">Manage report data</h2>
+            <p className="mt-1 text-sm text-[#7d6a60]">
+              Reports use these order records. Select one or many records to
+              remove them.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll}>
+              {allSelected ? 'Clear all' : 'Select all'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!selectedOrders.length}
+              onClick={() => setPendingDelete(selectedOrders)}
+              className="border-red-200 text-red-700 hover:bg-red-50"
+            >
+              <Trash2 /> Delete selected ({selectedOrders.length})
+            </Button>
+          </div>
+        </div>
+        {reportOrders.length ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all report records"
+                    />
+                  </TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Guest / table</TableHead>
+                  <TableHead>Channel</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="w-12 text-right">Delete</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportOrders.map((order) => (
+                  <TableRow
+                    key={order.id}
+                    data-state={
+                      selectedIds.has(order.id) ? 'selected' : undefined
+                    }
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(order.id)}
+                        onCheckedChange={(checked) =>
+                          toggleOrder(order.id, checked === true)
+                        }
+                        aria-label={`Select ${order.orderNumber}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-bold">{order.orderNumber}</p>
+                      <p className="text-xs text-[#8b776d]">
+                        {new Date(order.createdAt).toLocaleDateString('en-IN')}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      {order.tableNumber
+                        ? `Table ${order.tableNumber}`
+                        : order.customerName || 'Walk-in'}
+                    </TableCell>
+                    <TableCell>{order.orderType}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(order.status)}`}
+                      >
+                        {order.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {rupees.format(order.total)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setPendingDelete([order])}
+                        className="text-red-700 hover:bg-red-50 hover:text-red-800"
+                        aria-label={`Delete ${order.orderNumber} from reports`}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#d3c6bb] px-4 py-10 text-center text-sm text-[#7d6a60]">
+            No order records are available for reports.
+          </div>
+        )}
+      </div>
+      <AlertDialog
+        open={pendingDelete.length > 0}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete([]);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {pendingDelete.length} report record
+              {pendingDelete.length === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the selected orders, their item details
+              and any linked customer reviews. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>
+              Keep records
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={removeReportOrders}
+              disabled={deleting}
+              className="bg-red-700 hover:bg-red-800"
+            >
+              <Trash2 /> {deleting ? 'Deleting…' : 'Delete records'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

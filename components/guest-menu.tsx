@@ -302,17 +302,19 @@ export function GuestMenu() {
             onClick={() => {
               window.location.href = '/menu';
             }}
-            className="flex items-center gap-3 text-left"
+            className="flex min-w-0 items-center gap-2 text-left sm:gap-3"
           >
             {/* oxlint-disable-next-line next/no-img-element */}
             <img
               src="/tripti-logo.png"
               alt=""
-              className="size-12 rounded-full object-contain"
+              className="size-10 shrink-0 rounded-full object-contain sm:size-12"
             />
-            <span className="hidden leading-tight sm:block">
-              <b className="block font-serif text-xl text-[#3d130d]">Tripti</b>
-              <span className="text-xs font-bold uppercase tracking-[.16em] text-[#9b6a32]">
+            <span className="min-w-0 leading-tight">
+              <b className="block font-serif text-lg text-[#3d130d] sm:text-xl">
+                Tripti
+              </b>
+              <span className="block whitespace-nowrap text-[8px] font-bold uppercase tracking-[.08em] text-[#9b6a32] sm:text-xs sm:tracking-[.16em]">
                 The Indian Flavour
               </span>
             </span>
@@ -322,7 +324,7 @@ export function GuestMenu() {
               onClick={() => {
                 window.location.href = '/account';
               }}
-              className="flex items-center gap-2 rounded-full border border-[#ded3c8] bg-white px-3 py-2 text-sm font-extrabold text-[#6a2116] sm:px-4"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[#ded3c8] bg-white text-sm font-extrabold text-[#6a2116] sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2"
             >
               <CalendarDays className="size-4" />
               <span className="hidden sm:inline">Book a table</span>
@@ -338,7 +340,7 @@ export function GuestMenu() {
             </button>
             <button
               onClick={openCheckout}
-              className="relative grid size-11 place-items-center rounded-full bg-[#6a2116] text-white shadow-sm"
+              className="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#6a2116] text-white shadow-sm sm:size-11"
               aria-label={`Open cart with ${count} items`}
             >
               <ShoppingBag className="size-5" />
@@ -352,7 +354,7 @@ export function GuestMenu() {
               onClick={() => {
                 window.location.href = '/account';
               }}
-              className="grid size-11 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d]"
+              className="grid size-10 shrink-0 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d] sm:size-11"
               aria-label="Customer account"
             >
               <UserRound className="size-5" />
@@ -361,7 +363,7 @@ export function GuestMenu() {
               onClick={() => {
                 window.location.href = '/';
               }}
-              className="grid size-11 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d]"
+              className="grid size-10 shrink-0 place-items-center rounded-full border border-[#ded3c8] bg-white text-[#5c463d] sm:size-11"
               aria-label="Open staff system"
             >
               <ArrowLeft className="size-5" />
@@ -499,12 +501,12 @@ export function GuestMenu() {
                 {filtered.map((item) => (
                   <article
                     key={item.id}
-                    className="group overflow-hidden rounded-[24px] border border-[#e1d7cd] bg-white shadow-[0_10px_35px_rgba(75,42,24,.07)] transition hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(75,42,24,.12)]"
+                    className="group grid grid-cols-[minmax(0,1fr)_116px] overflow-hidden rounded-[20px] border border-[#e1d7cd] bg-white shadow-[0_10px_35px_rgba(75,42,24,.07)] transition hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(75,42,24,.12)] sm:block sm:rounded-[24px]"
                   >
-                    <div className="relative overflow-hidden">
+                    <div className="relative order-2 min-h-32 overflow-hidden sm:order-none sm:min-h-0">
                       <DishPhoto
                         item={item}
-                        className="aspect-[4/3] w-full transition duration-500 group-hover:scale-[1.035]"
+                        className="h-full min-h-32 w-full transition duration-500 group-hover:scale-[1.035] sm:aspect-[4/3] sm:h-auto sm:min-h-0"
                       />
                       <span className="absolute left-3 top-3 rounded-full bg-white/95 p-1.5 shadow">
                         <VegMark veg={item.veg} />
@@ -515,7 +517,7 @@ export function GuestMenu() {
                         </span>
                       )}
                     </div>
-                    <div className="p-3">
+                    <div className="order-1 min-w-0 p-3 sm:order-none">
                       <h3 className="line-clamp-2 min-h-10 font-serif text-base font-black leading-5">
                         {item.name}
                       </h3>
@@ -561,7 +563,7 @@ export function GuestMenu() {
             )}
           </section>
 
-          <aside className="sticky top-[98px] hidden h-fit space-y-4 xl:block">
+          <aside className="sticky top-[98px] hidden max-h-[calc(100dvh-114px)] space-y-4 overflow-y-auto pr-1 [scrollbar-width:thin] xl:block">
             <section className="overflow-hidden rounded-[28px] border border-[#ded3c8] bg-white shadow-[0_18px_55px_rgba(58,32,18,.1)]">
               <div className="bg-[#f6a81b] p-5 text-[#351008]">
                 <p className="text-xs font-black uppercase tracking-[.16em]">

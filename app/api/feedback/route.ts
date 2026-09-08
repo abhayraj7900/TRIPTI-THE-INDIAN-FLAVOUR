@@ -123,3 +123,54 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    if (!isStaffRequest(request)) {
+      return Response.json(
+        { error: 'Staff sign-in required' },
+        { status: 401 },
+      );
+    }
+    const input = (await request.json()) as {
+      orderId?: string;
+      orderIds?: string[];
+    };
+    const orderIds = [
+      ...new Set([
+        ...(Array.isArray(input.orderIds) ? input.orderIds : []),
+        ...(input.orderId ? [input.orderId] : []),
+      ]),
+    ]
+      .filter(
+        (id): id is string =>
+          typeof id === 'string' && id.length > 0 && id.length <= 80,
+      )
+      .slice(0, 100);
+    if (!orderIds.length) {
+      return Response.json(
+        { error: 'Select at least one review' },
+        { status: 400 },
+      );
+    }
+
+    const db = getD1Binding();
+    const placeholders = orderIds.map(() => '?').join(', ');
+    const result = await db
+      .prepare(`DELETE FROM order_feedback WHERE order_id IN (${placeholders})`)
+      .bind(...orderIds)
+      .run();
+    if (!result.meta.changes) {
+      return Response.json({ error: 'Reviews not found' }, { status: 404 });
+    }
+    return Response.json({ orderIds, deleted: result.meta.changes });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Unable to delete reviews',
+      },
+      { status: 500 },
+    );
+  }
+}
