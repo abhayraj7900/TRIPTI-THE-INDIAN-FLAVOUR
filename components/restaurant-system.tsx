@@ -16,6 +16,7 @@ import {
   LayoutGrid,
   Link as LinkIcon,
   Megaphone,
+  MessageCircle,
   Minus,
   PackageOpen,
   PackageCheck,
@@ -300,7 +301,7 @@ export function RestaurantSystem() {
   const tax = Math.round(subtotal * 0.05);
   const total = Math.max(0, subtotal + tax - discount);
   const activeTickets = orders.filter((order) =>
-    ['new', 'preparing', 'ready'].includes(order.status),
+    ['new', 'preparing', 'ready', 'served'].includes(order.status),
   );
   const categoryNames = [
     'All',
@@ -490,7 +491,9 @@ export function RestaurantSystem() {
         ? 'preparing'
         : order.status === 'preparing'
           ? 'ready'
-          : 'completed';
+          : order.status === 'ready'
+            ? 'served'
+            : 'completed';
     setOrders((current) =>
       current.map((item) =>
         item.id === order.id ? { ...item, status: next } : item,
@@ -1341,13 +1344,14 @@ function KitchenView({
   onAdvance: (order: OrderRecord) => void;
 }) {
   const columns = [
-    { id: 'new', label: 'New orders', color: 'bg-blue-500' },
+    { id: 'new', label: 'Accepted', color: 'bg-blue-500' },
     { id: 'preparing', label: 'Preparing', color: 'bg-amber-500' },
     { id: 'ready', label: 'Ready to serve', color: 'bg-emerald-500' },
+    { id: 'served', label: 'Served', color: 'bg-violet-500' },
   ];
   return (
     <section className="p-4 pb-28 md:p-7 lg:pb-7">
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {columns.map((column) => (
           <div
             key={column.id}
@@ -1363,7 +1367,7 @@ function KitchenView({
           </div>
         ))}
       </div>
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {columns.map((column) => (
           <div key={column.id} className="rounded-[22px] bg-[#ece7df] p-3">
             <div className="mb-3 flex items-center justify-between px-1">
@@ -1409,9 +1413,11 @@ function Ticket({
       ? 'Start cooking'
       : order.status === 'preparing'
         ? 'Mark ready'
-        : isDineIn
-          ? 'Mark served'
-          : 'Mark handed over';
+        : order.status === 'ready'
+          ? isDineIn
+            ? 'Mark served'
+            : 'Mark handed over'
+          : 'Close table order';
   const ServiceIcon = isDineIn
     ? UtensilsCrossed
     : order.orderType === 'Delivery'
@@ -1481,11 +1487,15 @@ function Ticket({
       )}
       <Button
         onClick={() => onAdvance(order)}
-        variant={order.status === 'ready' ? 'default' : 'outline'}
+        variant={
+          ['ready', 'served'].includes(order.status) ? 'default' : 'outline'
+        }
         className={
           order.status === 'ready'
             ? 'h-10 w-full bg-emerald-700 hover:bg-emerald-800'
-            : 'h-10 w-full bg-white'
+            : order.status === 'served'
+              ? 'h-10 w-full bg-violet-700 hover:bg-violet-800'
+              : 'h-10 w-full bg-white'
         }
       >
         {label}
@@ -1520,7 +1530,7 @@ function TablesView({
     const activeOrder = orders.find(
       (order) =>
         order.tableNumber === number &&
-        ['new', 'preparing', 'ready'].includes(order.status),
+        ['new', 'preparing', 'ready', 'served'].includes(order.status),
     );
     const booking = bookings.find(
       (item) => item.tableNumber === number && item.status === 'booked',
@@ -1639,6 +1649,14 @@ function TablesView({
                   >
                     Cancel
                   </Button>
+                  <a
+                    href={`https://wa.me/${booking.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${booking.customerName}, your Tripti table booking ${booking.bookingNumber} is confirmed for Table ${booking.tableNumber} on ${booking.bookingDate} at ${booking.bookingTime}.`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    <MessageCircle className="size-3.5" /> WhatsApp
+                  </a>
                 </>
               )}
               {status === 'seated' && (

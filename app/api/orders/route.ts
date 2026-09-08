@@ -1,5 +1,9 @@
 import { getD1Binding } from '@/db/d1';
-import { isStaffRequest, normalizePhone } from '@/lib/auth';
+import {
+  isStaffRequest,
+  normalizePhone,
+  readCustomerSession,
+} from '@/lib/auth';
 
 type OrderItemInput = {
   menuItemId: number;
@@ -125,7 +129,19 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     const orderNumber = `TRP-${String(now).slice(-6)}`;
     const paymentMethod = input.paymentMethod?.trim() || null;
-    const customerPhone = normalizePhone(input.customerPhone ?? '') || null;
+    const customerSession =
+      input.orderType === 'Delivery'
+        ? await readCustomerSession(request.headers.get('cookie'))
+        : null;
+    if (input.orderType === 'Delivery' && !customerSession) {
+      return Response.json(
+        { error: 'Customer PIN sign-in is required for delivery' },
+        { status: 401 },
+      );
+    }
+    const customerPhone =
+      normalizePhone(customerSession?.phone ?? input.customerPhone ?? '') ||
+      null;
     const db = getD1Binding();
 
     await db.batch([
@@ -382,15 +398,20 @@ export async function DELETE(request: Request) {
     const placeholders = ids.map(() => '?').join(', ');
     const results = await db.batch([
       db
+        .prepare(
+          `DELETE FROM order_feedback WHERE order_id IN (${placeholders})`,
+        )
+        .bind(...ids),
+      db
         .prepare(`DELETE FROM order_items WHERE order_id IN (${placeholders})`)
         .bind(...ids),
       db
         .prepare(`DELETE FROM orders WHERE id IN (${placeholders})`)
         .bind(...ids),
     ]);
-    if (!results[1].meta.changes)
+    if (!results[2].meta.changes)
       return Response.json({ error: 'Orders not found' }, { status: 404 });
-    return Response.json({ ids, deleted: results[1].meta.changes });
+    return Response.json({ ids, deleted: results[2].meta.changes });
   } catch (error) {
     return Response.json(
       {

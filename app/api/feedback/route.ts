@@ -1,0 +1,85 @@
+import { getD1Binding } from '@/db/d1';
+import { normalizePhone, readCustomerSession } from '@/lib/auth';
+
+type FeedbackInput = {
+  orderNumber?: string;
+  phone?: string;
+  foodRating?: number;
+  serviceRating?: number;
+  notes?: string;
+};
+
+export async function POST(request: Request) {
+  try {
+    const input = (await request.json()) as FeedbackInput;
+    const orderNumber = input.orderNumber?.trim().toUpperCase();
+    const session = await readCustomerSession(request.headers.get('cookie'));
+    const phone = normalizePhone(session?.phone ?? input.phone ?? '');
+    const foodRating = Number(input.foodRating);
+    const serviceRating = Number(input.serviceRating);
+    if (
+      !orderNumber ||
+      phone.length < 8 ||
+      !Number.isInteger(foodRating) ||
+      foodRating < 1 ||
+      foodRating > 5 ||
+      !Number.isInteger(serviceRating) ||
+      serviceRating < 1 ||
+      serviceRating > 5
+    ) {
+      return Response.json(
+        { error: 'Choose both ratings from 1 to 5' },
+        { status: 400 },
+      );
+    }
+
+    const db = getD1Binding();
+    const order = await db
+      .prepare(
+        `SELECT id, table_number AS tableNumber, status
+         FROM orders WHERE order_number = ? AND customer_phone = ? LIMIT 1`,
+      )
+      .bind(orderNumber, phone)
+      .first<{ id: string; tableNumber: string | null; status: string }>();
+    if (!order)
+      return Response.json({ error: 'Order not found' }, { status: 404 });
+    if (!['served', 'completed'].includes(order.status)) {
+      return Response.json(
+        { error: 'Rating opens after your food is served' },
+        { status: 409 },
+      );
+    }
+
+    const now = Date.now();
+    await db
+      .prepare(
+        `INSERT INTO order_feedback (
+          order_id, customer_phone, table_number, food_rating, service_rating, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(order_id) DO UPDATE SET food_rating = excluded.food_rating,
+          service_rating = excluded.service_rating, notes = excluded.notes, updated_at = excluded.updated_at`,
+      )
+      .bind(
+        order.id,
+        phone,
+        order.tableNumber,
+        foodRating,
+        serviceRating,
+        input.notes?.trim().slice(0, 1000) || null,
+        now,
+        now,
+      )
+      .run();
+    return Response.json({ saved: true, foodRating, serviceRating });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Feedback could not be saved',
+      },
+      { status: 500 },
+    );
+  }
+}

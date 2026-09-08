@@ -1,9 +1,76 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "20b37a57-8598-44e4-8f2a-97c27e4523af",
-  "prevId": "6b386537-f20d-4ada-b2c7-76a99551b92b",
+  "id": "4c69ff53-de55-49c9-9e51-b32b9946ae97",
+  "prevId": "20b37a57-8598-44e4-8f2a-97c27e4523af",
   "tables": {
+    "customer_otps": {
+      "name": "customer_otps",
+      "columns": {
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code_hash": {
+          "name": "code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code_salt": {
+          "name": "code_salt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "customer_profiles": {
       "name": "customer_profiles",
       "columns": {
@@ -209,14 +276,93 @@
       "indexes": {
         "idx_menu_items_active_category": {
           "name": "idx_menu_items_active_category",
-          "columns": [
-            "active",
-            "category"
-          ],
+          "columns": ["active", "category"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "order_feedback": {
+      "name": "order_feedback",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "customer_phone": {
+          "name": "customer_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "table_number": {
+          "name": "table_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "food_rating": {
+          "name": "food_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "service_rating": {
+          "name": "service_rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_order_feedback_customer_phone": {
+          "name": "idx_order_feedback_customer_phone",
+          "columns": ["customer_phone", "created_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "order_feedback_order_id_orders_id_fk": {
+          "name": "order_feedback_order_id_orders_id_fk",
+          "tableFrom": "order_feedback",
+          "tableTo": "orders",
+          "columnsFrom": ["order_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -277,9 +423,7 @@
       "indexes": {
         "idx_order_items_order_id": {
           "name": "idx_order_items_order_id",
-          "columns": [
-            "order_id"
-          ],
+          "columns": ["order_id"],
           "isUnique": false
         }
       },
@@ -288,12 +432,8 @@
           "name": "order_items_order_id_orders_id_fk",
           "tableFrom": "order_items",
           "tableTo": "orders",
-          "columnsFrom": [
-            "order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["order_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -445,32 +585,22 @@
       "indexes": {
         "orders_order_number_unique": {
           "name": "orders_order_number_unique",
-          "columns": [
-            "order_number"
-          ],
+          "columns": ["order_number"],
           "isUnique": true
         },
         "idx_orders_status_created_at": {
           "name": "idx_orders_status_created_at",
-          "columns": [
-            "status",
-            "created_at"
-          ],
+          "columns": ["status", "created_at"],
           "isUnique": false
         },
         "idx_orders_payment_status": {
           "name": "idx_orders_payment_status",
-          "columns": [
-            "payment_status"
-          ],
+          "columns": ["payment_status"],
           "isUnique": false
         },
         "idx_orders_customer_phone": {
           "name": "idx_orders_customer_phone",
-          "columns": [
-            "customer_phone",
-            "created_at"
-          ],
+          "columns": ["customer_phone", "created_at"],
           "isUnique": false
         }
       },
@@ -602,34 +732,22 @@
       "indexes": {
         "table_bookings_booking_number_unique": {
           "name": "table_bookings_booking_number_unique",
-          "columns": [
-            "booking_number"
-          ],
+          "columns": ["booking_number"],
           "isUnique": true
         },
         "idx_bookings_status_date": {
           "name": "idx_bookings_status_date",
-          "columns": [
-            "status",
-            "booking_date"
-          ],
+          "columns": ["status", "booking_date"],
           "isUnique": false
         },
         "idx_bookings_table_slot": {
           "name": "idx_bookings_table_slot",
-          "columns": [
-            "table_number",
-            "booking_date",
-            "booking_time"
-          ],
+          "columns": ["table_number", "booking_date", "booking_time"],
           "isUnique": false
         },
         "idx_bookings_phone": {
           "name": "idx_bookings_phone",
-          "columns": [
-            "phone",
-            "created_at"
-          ],
+          "columns": ["phone", "created_at"],
           "isUnique": false
         }
       },

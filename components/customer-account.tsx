@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { OrderFeedback } from '@/components/order-feedback';
 import { Textarea } from '@/components/ui/textarea';
 import type { BookingRecord, OrderRecord } from '@/lib/restaurant-data';
 
@@ -23,7 +24,7 @@ const rupees = new Intl.NumberFormat('en-IN', {
   currency: 'INR',
   maximumFractionDigits: 0,
 });
-const stages = ['new', 'preparing', 'ready', 'completed'];
+const stages = ['new', 'preparing', 'ready', 'served'];
 
 type Customer = { name: string; phone: string };
 
@@ -35,6 +36,11 @@ export function CustomerAccount() {
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [otpMode, setOtpMode] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
 
   async function loadAccount() {
     const response = await fetch('/api/customer');
@@ -56,9 +62,15 @@ export function CustomerAccount() {
   useEffect(() => {
     void loadAccount();
   }, []);
+  useEffect(() => {
+    if (!customer) return;
+    const timer = window.setInterval(() => void loadAccount(), 5000);
+    return () => window.clearInterval(timer);
+  }, [customer?.phone]);
 
   async function login() {
     setError('');
+    setAuthBusy(true);
     const response = await fetch('/api/auth/customer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -67,13 +79,60 @@ export function CustomerAccount() {
     const data = (await response.json()) as {
       customer?: Customer;
       error?: string;
+      requiresOtp?: boolean;
     };
     if (!response.ok || !data.customer) {
       setError(data.error || 'Sign in failed');
+      if (data.requiresOtp) setOtpMode(true);
+      setAuthBusy(false);
       return;
     }
     setCustomer(data.customer);
     await loadAccount();
+    setAuthBusy(false);
+  }
+
+  async function requestOtp() {
+    setError('');
+    setAuthBusy(true);
+    const response = await fetch('/api/auth/customer/otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'request', phone }),
+    });
+    const data = (await response.json()) as { sent?: boolean; error?: string };
+    if (!response.ok || !data.sent)
+      setError(data.error || 'OTP could not be sent');
+    else setOtpSent(true);
+    setAuthBusy(false);
+  }
+
+  async function verifyOtpAndSetPin() {
+    setError('');
+    setAuthBusy(true);
+    const response = await fetch('/api/auth/customer/otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'verify_and_set_pin',
+        phone,
+        otp,
+        pin: newPin,
+      }),
+    });
+    const data = (await response.json()) as {
+      customer?: Customer;
+      error?: string;
+    };
+    if (!response.ok || !data.customer) {
+      setError(data.error || 'OTP verification failed');
+      setAuthBusy(false);
+      return;
+    }
+    setPin(newPin);
+    setCustomer(data.customer);
+    await loadAccount();
+    setAuthBusy(false);
   }
 
   async function logout() {
@@ -117,9 +176,8 @@ export function CustomerAccount() {
               Customer sign in
             </h1>
             <p className="mt-2 leading-6 text-[#776158]">
-              Use the same mobile number and 6 digit PIN used for dine-in or
-              takeaway. Your orders, live status and table bookings stay
-              together here.
+              Online table booking and delivery use your mobile number and 6
+              digit PIN. Restaurant table orders do not need a login.
             </p>
             <div className="mt-6 space-y-4">
               <label className="block space-y-2 text-sm font-bold">
@@ -136,35 +194,124 @@ export function CustomerAccount() {
                   className="h-12"
                 />
               </label>
-              <label className="block space-y-2 text-sm font-bold">
-                6 digit PIN
-                <Input
-                  value={pin}
-                  onChange={(event) =>
-                    setPin(event.target.value.replace(/\D/g, '').slice(0, 6))
-                  }
-                  type="password"
-                  inputMode="numeric"
-                  placeholder="Enter exactly 6 digits"
-                  className="h-12"
-                />
-              </label>
-              <p className="text-xs leading-5 text-[#806b61]">
-                First visit: choose a 6 digit PIN. Your orders and bookings will
-                stay linked to this mobile number.
-              </p>
+              {!otpMode ? (
+                <>
+                  <label className="block space-y-2 text-sm font-bold">
+                    6 digit PIN
+                    <Input
+                      value={pin}
+                      onChange={(event) =>
+                        setPin(
+                          event.target.value.replace(/\D/g, '').slice(0, 6),
+                        )
+                      }
+                      type="password"
+                      inputMode="numeric"
+                      placeholder="Enter exactly 6 digits"
+                      className="h-12"
+                    />
+                  </label>
+                  <Button
+                    onClick={login}
+                    disabled={
+                      authBusy ||
+                      phone.replace(/\D/g, '').length < 8 ||
+                      pin.length !== 6
+                    }
+                    className="h-12 w-full bg-[#6a2116] font-bold hover:bg-[#521008]"
+                  >
+                    {authBusy ? 'Signing in…' : 'Continue with PIN'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpMode(true);
+                      setError('');
+                    }}
+                    className="w-full text-sm font-bold text-[#6a2116] underline"
+                  >
+                    First time or forgot PIN? Verify OTP
+                  </button>
+                </>
+              ) : (
+                <>
+                  {!otpSent ? (
+                    <Button
+                      onClick={requestOtp}
+                      disabled={authBusy || phone.replace(/\D/g, '').length < 8}
+                      className="h-12 w-full bg-[#6a2116] font-bold hover:bg-[#521008]"
+                    >
+                      {authBusy ? 'Sending OTP…' : 'Send verification OTP'}
+                    </Button>
+                  ) : (
+                    <>
+                      <label className="block space-y-2 text-sm font-bold">
+                        6 digit OTP
+                        <Input
+                          value={otp}
+                          onChange={(event) =>
+                            setOtp(
+                              event.target.value.replace(/\D/g, '').slice(0, 6),
+                            )
+                          }
+                          inputMode="numeric"
+                          placeholder="OTP received on your mobile"
+                          className="h-12"
+                        />
+                      </label>
+                      <label className="block space-y-2 text-sm font-bold">
+                        Set new 6 digit PIN
+                        <Input
+                          value={newPin}
+                          onChange={(event) =>
+                            setNewPin(
+                              event.target.value.replace(/\D/g, '').slice(0, 6),
+                            )
+                          }
+                          type="password"
+                          inputMode="numeric"
+                          placeholder="Create a PIN for future login"
+                          className="h-12"
+                        />
+                      </label>
+                      <Button
+                        onClick={verifyOtpAndSetPin}
+                        disabled={
+                          authBusy || otp.length !== 6 || newPin.length !== 6
+                        }
+                        className="h-12 w-full bg-[#6a2116] font-bold hover:bg-[#521008]"
+                      >
+                        {authBusy ? 'Verifying…' : 'Verify OTP & save PIN'}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtp('');
+                          setError('');
+                        }}
+                        className="w-full text-xs font-bold text-[#6a2116] underline"
+                      >
+                        Send a new OTP
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpMode(false);
+                      setOtpSent(false);
+                      setError('');
+                    }}
+                    className="w-full text-sm font-bold text-[#6a2116] underline"
+                  >
+                    Back to PIN login
+                  </button>
+                </>
+              )}
               {error && (
                 <p className="text-sm font-bold text-red-700">{error}</p>
               )}
-              <Button
-                onClick={login}
-                disabled={
-                  phone.replace(/\D/g, '').length < 8 || pin.length !== 6
-                }
-                className="h-12 w-full bg-[#6a2116] font-bold hover:bg-[#521008]"
-              >
-                Continue to account
-              </Button>
             </div>
           </div>
         </section>
@@ -286,7 +433,9 @@ function BookingCard({ onBooked }: { onBooked: () => Promise<void> }) {
       setMessage(data.error || 'Booking could not be saved');
     else {
       setMessage(
-        `${data.booking.bookingNumber} confirmed for table ${data.booking.tableNumber}`,
+        data.booking.whatsappStatus === 'sent'
+          ? `${data.booking.bookingNumber} confirmed for table ${data.booking.tableNumber}. WhatsApp confirmation sent.`
+          : `${data.booking.bookingNumber} confirmed for table ${data.booking.tableNumber}. Staff can send the WhatsApp confirmation.`,
       );
       setNotes('');
       await onBooked();
@@ -389,7 +538,9 @@ function CustomerOrderCard({ order }: { order: OrderRecord }) {
   const current =
     order.status === 'cancelled'
       ? -1
-      : Math.max(0, stages.indexOf(order.status));
+      : order.status === 'completed'
+        ? stages.length - 1
+        : Math.max(0, stages.indexOf(order.status));
   return (
     <article className="rounded-[22px] border border-[#e0d5cb] bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -424,7 +575,7 @@ function CustomerOrderCard({ order }: { order: OrderRecord }) {
                 )}
               </span>
               <p className="mt-2 text-[11px] font-bold capitalize text-[#765f55]">
-                {stage === 'new' ? 'Received' : stage}
+                {stage === 'new' ? 'Accepted' : stage}
               </p>
             </div>
           ))}
@@ -444,6 +595,12 @@ function CustomerOrderCard({ order }: { order: OrderRecord }) {
         <p className="mt-3 text-sm text-[#6f5a50]">
           <b>Delivery:</b> {order.deliveryAddress}
         </p>
+      )}
+      {['served', 'completed'].includes(order.status) && (
+        <OrderFeedback
+          orderNumber={order.orderNumber}
+          phone={order.customerPhone}
+        />
       )}
     </article>
   );

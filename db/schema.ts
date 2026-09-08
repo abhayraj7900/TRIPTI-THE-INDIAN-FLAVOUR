@@ -34,7 +34,9 @@ export const orderItems = sqliteTable(
   'order_items',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    orderId: text('order_id').notNull().references(() => orders.id),
+    orderId: text('order_id')
+      .notNull()
+      .references(() => orders.id),
     menuItemId: integer('menu_item_id').notNull(),
     name: text('name').notNull(),
     quantity: integer('quantity').notNull(),
@@ -72,7 +74,11 @@ export const tableBookings = sqliteTable(
   },
   (table) => [
     index('idx_bookings_status_date').on(table.status, table.bookingDate),
-    index('idx_bookings_table_slot').on(table.tableNumber, table.bookingDate, table.bookingTime),
+    index('idx_bookings_table_slot').on(
+      table.tableNumber,
+      table.bookingDate,
+      table.bookingTime,
+    ),
     index('idx_bookings_phone').on(table.phone, table.createdAt),
   ],
 );
@@ -93,7 +99,9 @@ export const menuItems = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
-  (table) => [index('idx_menu_items_active_category').on(table.active, table.category)],
+  (table) => [
+    index('idx_menu_items_active_category').on(table.active, table.category),
+  ],
 );
 
 export const siteSettings = sqliteTable('site_settings', {
@@ -107,6 +115,39 @@ export const customerProfiles = sqliteTable('customer_profiles', {
   name: text('name').notNull(),
   pinHash: text('pin_hash'),
   pinSalt: text('pin_salt'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const orderFeedback = sqliteTable(
+  'order_feedback',
+  {
+    orderId: text('order_id')
+      .primaryKey()
+      .references(() => orders.id),
+    customerPhone: text('customer_phone').notNull(),
+    tableNumber: text('table_number'),
+    foodRating: integer('food_rating').notNull(),
+    serviceRating: integer('service_rating').notNull(),
+    notes: text('notes'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_order_feedback_customer_phone').on(
+      table.customerPhone,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const customerOtps = sqliteTable('customer_otps', {
+  phone: text('phone').primaryKey(),
+  codeHash: text('code_hash').notNull(),
+  codeSalt: text('code_salt').notNull(),
+  purpose: text('purpose').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: integer('expires_at').notNull(),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

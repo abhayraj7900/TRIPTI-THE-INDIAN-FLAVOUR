@@ -5,5 +5,9 @@ declare namespace Cloudflare {
     CUSTOMER_SESSION_SECRET?: string;
     STAFF_USER_IDS?: string;
     STAFF_EMAILS?: string;
+    OTP_DELIVERY_WEBHOOK_URL?: string;
+    OTP_DELIVERY_WEBHOOK_SECRET?: string;
+    WHATSAPP_BOOKING_WEBHOOK_URL?: string;
+    WHATSAPP_BOOKING_WEBHOOK_SECRET?: string;
   }
 }

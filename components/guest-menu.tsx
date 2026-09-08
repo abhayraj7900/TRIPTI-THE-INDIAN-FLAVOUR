@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { DishPhoto } from '@/components/dish-photo';
+import { OrderFeedback } from '@/components/order-feedback';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ import {
   menu,
   type CustomerSettings,
   type MenuItem,
+  type OrderRecord,
 } from '@/lib/restaurant-data';
 
 const rupees = new Intl.NumberFormat('en-IN', {
@@ -56,10 +58,6 @@ const paymentOptions = [
   { name: 'UPI', note: 'Pay by UPI when served', icon: Smartphone },
   { name: 'Card', note: 'Pay on the restaurant terminal', icon: CreditCard },
 ] as const;
-
-function localOrderNumber() {
-  return `TRP-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-}
 
 function VegMark({ veg }: { veg: boolean }) {
   return (
@@ -103,6 +101,7 @@ export function GuestMenu() {
     useState<(typeof paymentOptions)[number]['name']>('Pay at counter');
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState('');
+  const [orderError, setOrderError] = useState('');
 
   useEffect(() => {
     fetch('/api/menu')
@@ -179,6 +178,7 @@ export function GuestMenu() {
   function openCheckout() {
     setCheckoutStep(0);
     setConfirmation('');
+    setOrderError('');
     setCheckoutOpen(true);
   }
 
@@ -213,12 +213,13 @@ export function GuestMenu() {
       !cartItems.length ||
       !guest.trim() ||
       phone.replace(/\D/g, '').length < 8 ||
-      (orderType !== 'Delivery' && !customerVerified) ||
+      (orderType === 'Delivery' && !customerVerified) ||
       (orderType === 'Dine in' && !tableNumber.trim()) ||
       (orderType === 'Delivery' && !deliveryAddress.trim())
     )
       return;
     setSaving(true);
+    setOrderError('');
     const payload = {
       orderType,
       tableNumber: orderType === 'Dine in' ? tableNumber.trim() : undefined,
@@ -247,13 +248,15 @@ export function GuestMenu() {
         order: { orderNumber: string };
       };
       setConfirmation(data.order.orderNumber);
-    } catch {
-      setConfirmation(localOrderNumber());
-    } finally {
-      setSaving(false);
       setCart({});
       setKitchenNotes('');
       setCheckoutStep(3);
+    } catch {
+      setOrderError(
+        'Order could not be sent. Please check your connection and try again.',
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -704,9 +707,10 @@ export function GuestMenu() {
                 </div>
                 <div className="mt-2 flex justify-between">
                   <span>Status</span>
-                  <b className="text-amber-700">Order received</b>
+                  <b className="text-amber-700">Accepted</b>
                 </div>
               </div>
+              <LiveOrderStatus orderNumber={confirmation} phone={phone} />
               <div className="mt-7 flex flex-col justify-center gap-2 sm:flex-row">
                 <a
                   href={`/track?order=${encodeURIComponent(confirmation)}&phone=${encodeURIComponent(phone)}`}
@@ -833,7 +837,7 @@ export function GuestMenu() {
                           ? !cartItems.length
                           : !guest.trim() ||
                             phone.replace(/\D/g, '').length < 8 ||
-                            (orderType !== 'Delivery' && !customerVerified) ||
+                            (orderType === 'Delivery' && !customerVerified) ||
                             (orderType === 'Dine in' && !tableNumber.trim()) ||
                             (orderType === 'Delivery' &&
                               !deliveryAddress.trim())
@@ -854,12 +858,88 @@ export function GuestMenu() {
                     </Button>
                   )}
                 </div>
+                {orderError && (
+                  <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">
+                    {orderError}
+                  </p>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+const liveStages = ['new', 'preparing', 'ready', 'served'];
+
+function LiveOrderStatus({
+  orderNumber,
+  phone,
+}: {
+  orderNumber: string;
+  phone: string;
+}) {
+  const [order, setOrder] = useState<OrderRecord | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function refresh() {
+      try {
+        const response = await fetch(
+          `/api/track?order=${encodeURIComponent(orderNumber)}&phone=${encodeURIComponent(phone)}`,
+        );
+        const data = (await response.json()) as { order?: OrderRecord };
+        if (active && response.ok && data.order) setOrder(data.order);
+      } catch {
+        // A temporary polling failure should not hide the confirmed order.
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [orderNumber, phone]);
+
+  const status = order?.status ?? 'new';
+  const current =
+    status === 'completed'
+      ? liveStages.length - 1
+      : Math.max(0, liveStages.indexOf(status));
+
+  return (
+    <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-[#e2d6cb] bg-white p-4 text-left">
+      <div className="flex items-center justify-between gap-3">
+        <b>Live order progress</b>
+        <span className="text-xs font-bold text-emerald-700">Auto updates</span>
+      </div>
+      {status === 'cancelled' ? (
+        <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">
+          This order was cancelled. Please speak with our staff.
+        </p>
+      ) : (
+        <div className="mt-4 grid grid-cols-4 gap-1">
+          {liveStages.map((stage, index) => (
+            <div key={stage} className="text-center">
+              <span
+                className={`mx-auto grid size-8 place-items-center rounded-full text-xs font-black ${index <= current ? 'bg-[#6a2116] text-white' : 'bg-[#eee5dd] text-[#9a877d]'}`}
+              >
+                {index < current ? <Check className="size-4" /> : index + 1}
+              </span>
+              <p className="mt-2 text-[10px] font-bold capitalize text-[#765f55]">
+                {stage === 'new' ? 'Accepted' : stage}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      {['served', 'completed'].includes(status) && (
+        <OrderFeedback orderNumber={orderNumber} phone={phone} />
+      )}
+    </div>
   );
 }
 
@@ -1080,7 +1160,7 @@ function DetailsStep({
           </button>
         ))}
       </div>
-      {orderType !== 'Delivery' && (
+      {orderType === 'Delivery' && (
         <div
           className={`rounded-2xl border p-4 ${customerVerified ? 'border-emerald-200 bg-emerald-50' : 'border-[#e2d6cb] bg-[#faf6f1]'}`}
         >
@@ -1092,11 +1172,11 @@ function DetailsStep({
               <p className="font-extrabold">
                 {customerVerified
                   ? 'Customer details verified'
-                  : 'Sign in to link your order'}
+                  : 'Sign in required for delivery'}
               </p>
               <p className="mt-1 text-sm leading-5 text-[#765f55]">
-                Use your mobile number and 6 digit PIN. First visit: choose a
-                new PIN; future orders stay linked to the same number.
+                Use your mobile number and saved 6 digit PIN. First-time PIN
+                setup and forgotten PIN reset both use OTP verification.
               </p>
             </div>
           </div>
@@ -1156,6 +1236,12 @@ function DetailsStep({
                   {verificationError}
                 </p>
               )}
+              <a
+                href="/account"
+                className="text-center text-sm font-bold text-[#6a2116] underline sm:col-span-2"
+              >
+                First time or forgot PIN? Verify with OTP
+              </a>
             </div>
           )}
         </div>
@@ -1196,29 +1282,31 @@ function DetailsStep({
           />
         </label>
       </div>
+      {orderType !== 'Delivery' && (
+        <label
+          htmlFor="guest-phone"
+          className="block space-y-2 text-sm font-extrabold"
+        >
+          Mobile number{' '}
+          <span className="font-medium text-[#8b776d]">
+            (no login—used only for live tracking)
+          </span>
+          <Input
+            id="guest-phone"
+            value={phone}
+            onChange={(event) =>
+              setPhone(
+                event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16),
+              )
+            }
+            placeholder="For order updates"
+            inputMode="tel"
+            className="h-12 text-base"
+          />
+        </label>
+      )}
       {orderType === 'Delivery' && (
         <>
-          <label
-            htmlFor="guest-phone"
-            className="block space-y-2 text-sm font-extrabold"
-          >
-            Mobile number{' '}
-            <span className="font-medium text-[#8b776d]">
-              (required for tracking)
-            </span>
-            <Input
-              id="guest-phone"
-              value={phone}
-              onChange={(event) =>
-                setPhone(
-                  event.target.value.replace(/[^0-9+ -]/g, '').slice(0, 16),
-                )
-              }
-              placeholder="For order updates"
-              inputMode="tel"
-              className="h-12 text-base"
-            />
-          </label>
           <div className="rounded-2xl border border-[#e2d6cb] bg-[#faf6f1] p-4">
             <label
               htmlFor="delivery-address"

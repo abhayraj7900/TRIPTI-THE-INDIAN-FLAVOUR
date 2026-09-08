@@ -187,6 +187,7 @@ export type BookingRecord = {
   status: 'booked' | 'completed' | 'cancelled';
   createdAt: number;
   updatedAt: number;
+  whatsappStatus?: 'sent' | 'failed' | 'setup_required';
 };
 
 export type CustomerSettings = {
