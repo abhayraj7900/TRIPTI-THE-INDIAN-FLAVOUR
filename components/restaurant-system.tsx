@@ -29,6 +29,7 @@ import {
   ShoppingBag,
   Smartphone,
   Sparkles,
+  Star,
   Trash2,
   TrendingUp,
   TriangleAlert,
@@ -105,6 +106,7 @@ type View =
   | 'tables'
   | 'orders'
   | 'inventory'
+  | 'reviews'
   | 'reports'
   | 'content';
 type Cart = Record<number, number>;
@@ -135,6 +137,19 @@ type BookingPayload = Pick<
   | 'bookingTime'
   | 'tableNumber'
 > & { notes?: string };
+type FeedbackRecord = {
+  orderId: string;
+  orderNumber: string;
+  orderType: string;
+  customerName: string | null;
+  customerPhone: string;
+  tableNumber: string | null;
+  foodRating: number;
+  serviceRating: number;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
 
 const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'pos', label: 'Point of sale', icon: LayoutGrid },
@@ -142,6 +157,7 @@ const navigation: { id: View; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'tables', label: 'Tables', icon: UtensilsCrossed },
   { id: 'orders', label: 'Orders', icon: ClipboardList },
   { id: 'inventory', label: 'Inventory', icon: PackageOpen },
+  { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'content', label: 'Menu & offers', icon: Settings2 },
 ];
@@ -152,6 +168,7 @@ const headings: Record<View, { eyebrow: string; title: string }> = {
   tables: { eyebrow: 'Main dining · 16 tables', title: 'Floor plan' },
   orders: { eyebrow: 'Today · All channels', title: 'Orders & billing' },
   inventory: { eyebrow: 'Last checked 10 minutes ago', title: 'Inventory' },
+  reviews: { eyebrow: 'Food & service feedback', title: 'Customer reviews' },
   reports: { eyebrow: 'Sunday, 7 September', title: 'Daily performance' },
   content: { eyebrow: 'Customer website controls', title: 'Menu & promotions' },
 };
@@ -231,6 +248,7 @@ export function RestaurantSystem() {
   const [notes, setNotes] = useState('');
   const [orders, setOrders] = useState<OrderRecord[]>(demoOrders);
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
+  const [reviews, setReviews] = useState<FeedbackRecord[]>([]);
   const [catalog, setCatalog] = useState<MenuItem[]>(
     menu.map((item) => ({ ...item, active: true })),
   );
@@ -284,6 +302,23 @@ export function RestaurantSystem() {
     const timer = window.setTimeout(() => setNotice(''), 3500);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (activeView !== 'reviews') return;
+    let active = true;
+    async function loadReviews() {
+      const response = await fetch('/api/feedback');
+      if (!response.ok) return;
+      const data = (await response.json()) as { reviews?: FeedbackRecord[] };
+      if (active && Array.isArray(data.reviews)) setReviews(data.reviews);
+    }
+    void loadReviews();
+    const timer = window.setInterval(loadReviews, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [activeView]);
 
   const filtered = catalog.filter(
     (item) =>
@@ -802,6 +837,7 @@ export function RestaurantSystem() {
               onAdd={addStockItem}
             />
           )}
+          {activeView === 'reviews' && <ReviewsView reviews={reviews} />}
           {activeView === 'reports' && <ReportsView orders={orders} />}
           {activeView === 'content' && (
             <ContentManager
@@ -3412,6 +3448,116 @@ function AddInventoryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReviewsView({ reviews }: { reviews: FeedbackRecord[] }) {
+  const averageFood = reviews.length
+    ? reviews.reduce((sum, review) => sum + review.foodRating, 0) /
+      reviews.length
+    : 0;
+  const averageService = reviews.length
+    ? reviews.reduce((sum, review) => sum + review.serviceRating, 0) /
+      reviews.length
+    : 0;
+  return (
+    <section className="p-4 pb-28 md:p-7 lg:pb-7">
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <MetricCard
+          icon={Star}
+          label="Total reviews"
+          value={String(reviews.length)}
+          note="Saved customer feedback"
+        />
+        <MetricCard
+          icon={UtensilsCrossed}
+          label="Food rating"
+          value={averageFood ? `${averageFood.toFixed(1)} / 5` : '—'}
+          note="Average food score"
+        />
+        <MetricCard
+          icon={MessageCircle}
+          label="Service rating"
+          value={averageService ? `${averageService.toFixed(1)} / 5` : '—'}
+          note="Average restaurant service"
+        />
+      </div>
+      {reviews.length ? (
+        <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {reviews.map((review) => (
+            <article
+              key={review.orderId}
+              className="rounded-[22px] border border-[#ded8ce] bg-white p-5 shadow-[0_8px_30px_rgba(66,39,25,.06)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-serif text-xl font-bold">
+                    {review.tableNumber
+                      ? `Table ${review.tableNumber}`
+                      : review.customerName || review.orderType}
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-[#8d7569]">
+                    {review.orderNumber} · {review.orderType}
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#fff0d4] px-3 py-1 text-xs font-bold text-[#7c310e]">
+                  {new Date(review.updatedAt).toLocaleDateString('en-IN')}
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <RatingSummary label="Food" value={review.foodRating} />
+                <RatingSummary label="Service" value={review.serviceRating} />
+              </div>
+              {review.notes ? (
+                <blockquote className="mt-4 rounded-2xl bg-[#f7f2ec] p-4 text-sm leading-6 text-[#604d44]">
+                  “{review.notes}”
+                </blockquote>
+              ) : (
+                <p className="mt-4 text-sm text-[#8a766c]">No written note.</p>
+              )}
+              <p className="mt-4 border-t border-dashed border-[#ded3c8] pt-3 text-xs text-[#8a766c]">
+                {review.customerName || 'Restaurant guest'} ·{' '}
+                {review.customerPhone}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="grid min-h-72 place-items-center rounded-[24px] border border-dashed border-[#d3c6bb] bg-white text-center">
+          <div>
+            <Star className="mx-auto size-10 text-[#c2aa9e]" />
+            <h2 className="mt-3 font-serif text-2xl font-bold">
+              No reviews yet
+            </h2>
+            <p className="mt-2 text-[#7d6a60]">
+              Served table orders will show the food and service review form.
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RatingSummary({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl bg-[#fff8eb] p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-[#8a6b4e]">
+        {label}
+      </p>
+      <div
+        className="mt-2 flex items-center gap-1"
+        aria-label={`${label}: ${value} out of 5`}
+      >
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <Star
+            key={rating}
+            className={`size-4 ${rating <= value ? 'fill-[#f6a81b] text-[#d68708]' : 'text-[#d5c8bd]'}`}
+          />
+        ))}
+        <b className="ml-1 text-sm">{value}/5</b>
+      </div>
+    </div>
   );
 }
 

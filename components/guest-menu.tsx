@@ -59,6 +59,12 @@ const paymentOptions = [
   { name: 'Card', note: 'Pay on the restaurant terminal', icon: CreditCard },
 ] as const;
 
+type TableOrderTicket = {
+  orderNumber: string;
+  phone: string;
+  tableNumber: string;
+};
+
 function VegMark({ veg }: { veg: boolean }) {
   return (
     <span
@@ -102,6 +108,8 @@ export function GuestMenu() {
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [orderError, setOrderError] = useState('');
+  const [tableOrderTicket, setTableOrderTicket] =
+    useState<TableOrderTicket | null>(null);
 
   useEffect(() => {
     fetch('/api/menu')
@@ -140,6 +148,19 @@ export function GuestMenu() {
         }
       })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('tripti:table-order');
+      if (!saved) return;
+      const ticket = JSON.parse(saved) as Partial<TableOrderTicket>;
+      if (ticket.orderNumber && ticket.phone && ticket.tableNumber) {
+        setTableOrderTicket(ticket as TableOrderTicket);
+      }
+    } catch {
+      window.localStorage.removeItem('tripti:table-order');
+    }
   }, []);
 
   const cartItems = useMemo(
@@ -248,6 +269,18 @@ export function GuestMenu() {
         order: { orderNumber: string };
       };
       setConfirmation(data.order.orderNumber);
+      if (orderType === 'Dine in') {
+        const ticket = {
+          orderNumber: data.order.orderNumber,
+          phone: phone.trim(),
+          tableNumber: tableNumber.trim().padStart(2, '0'),
+        };
+        setTableOrderTicket(ticket);
+        window.localStorage.setItem(
+          'tripti:table-order',
+          JSON.stringify(ticket),
+        );
+      }
       setCart({});
       setKitchenNotes('');
       setCheckoutStep(3);
@@ -528,45 +561,77 @@ export function GuestMenu() {
             )}
           </section>
 
-          <aside className="sticky top-[98px] hidden h-fit overflow-hidden rounded-[28px] border border-[#ded3c8] bg-white shadow-[0_18px_55px_rgba(58,32,18,.1)] xl:block">
-            <div className="bg-[#45150e] p-5 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[.16em] text-[#ffc768]">
-                    Your order
-                  </p>
-                  <h2 className="mt-1 font-serif text-2xl font-black">
-                    {orderType === 'Dine in'
-                      ? `Table ${tableNumber || '—'}`
-                      : orderType}
-                  </h2>
-                </div>
-                <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black">
-                  {count} items
-                </span>
+          <aside className="sticky top-[98px] hidden h-fit space-y-4 xl:block">
+            <section className="overflow-hidden rounded-[28px] border border-[#ded3c8] bg-white shadow-[0_18px_55px_rgba(58,32,18,.1)]">
+              <div className="bg-[#f6a81b] p-5 text-[#351008]">
+                <p className="text-xs font-black uppercase tracking-[.16em]">
+                  Table order status
+                </p>
+                <h2 className="mt-1 font-serif text-2xl font-black">
+                  {tableOrderTicket
+                    ? `Table ${tableOrderTicket.tableNumber}`
+                    : 'No active table order'}
+                </h2>
               </div>
-            </div>
-            <CartBody
-              cartItems={cartItems}
-              cart={cart}
-              change={change}
-              subtotal={subtotal}
-              tax={tax}
-              total={total}
-            />
-            <div className="p-5 pt-0">
-              <Button
-                onClick={openCheckout}
-                disabled={!cartItems.length}
-                className="h-13 w-full rounded-2xl bg-[#f6a81b] text-base font-black text-[#351008] hover:bg-[#e99a08]"
-              >
-                Review & checkout <ChevronRight />
-              </Button>
-              <p className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-[#887269]">
-                <ShieldCheck className="size-4" /> Order goes directly to the
-                kitchen
-              </p>
-            </div>
+              {tableOrderTicket ? (
+                <div className="p-4">
+                  <p className="text-sm font-bold text-[#765f55]">
+                    {tableOrderTicket.orderNumber}
+                  </p>
+                  <LiveOrderStatus
+                    orderNumber={tableOrderTicket.orderNumber}
+                    phone={tableOrderTicket.phone}
+                    embedded
+                  />
+                </div>
+              ) : (
+                <div className="p-5 text-sm leading-6 text-[#765f55]">
+                  Restaurant mein table se order karne ke baad yahan Accepted,
+                  Preparing, Ready aur Served status dikhega.
+                </div>
+              )}
+            </section>
+
+            <section className="overflow-hidden rounded-[28px] border border-[#ded3c8] bg-white shadow-[0_18px_55px_rgba(58,32,18,.1)]">
+              <div className="bg-[#45150e] p-5 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[.16em] text-[#ffc768]">
+                      Your order
+                    </p>
+                    <h2 className="mt-1 font-serif text-2xl font-black">
+                      {orderType === 'Dine in'
+                        ? `Table ${tableNumber || '—'}`
+                        : orderType}
+                    </h2>
+                  </div>
+                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black">
+                    {count} items
+                  </span>
+                </div>
+              </div>
+              <CartBody
+                cartItems={cartItems}
+                cart={cart}
+                change={change}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+              />
+              <div className="p-5 pt-0">
+                <Button
+                  onClick={openCheckout}
+                  disabled={!cartItems.length}
+                  className="h-13 w-full rounded-2xl bg-[#f6a81b] text-base font-black text-[#351008] hover:bg-[#e99a08]"
+                >
+                  Review & checkout <ChevronRight />
+                </Button>
+                <p className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-[#887269]">
+                  <ShieldCheck className="size-4" /> Order goes directly to the
+                  kitchen
+                </p>
+              </div>
+            </section>
           </aside>
         </div>
       </div>
@@ -877,9 +942,11 @@ const liveStages = ['new', 'preparing', 'ready', 'served'];
 function LiveOrderStatus({
   orderNumber,
   phone,
+  embedded = false,
 }: {
   orderNumber: string;
   phone: string;
+  embedded?: boolean;
 }) {
   const [order, setOrder] = useState<OrderRecord | null>(null);
 
@@ -911,7 +978,13 @@ function LiveOrderStatus({
       : Math.max(0, liveStages.indexOf(status));
 
   return (
-    <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-[#e2d6cb] bg-white p-4 text-left">
+    <div
+      className={
+        embedded
+          ? 'mt-3 text-left'
+          : 'mx-auto mt-5 max-w-sm rounded-2xl border border-[#e2d6cb] bg-white p-4 text-left'
+      }
+    >
       <div className="flex items-center justify-between gap-3">
         <b>Live order progress</b>
         <span className="text-xs font-bold text-emerald-700">Auto updates</span>
@@ -936,6 +1009,22 @@ function LiveOrderStatus({
           ))}
         </div>
       )}
+      {order?.items?.length ? (
+        <div className="mt-4 space-y-1 border-t border-dashed border-[#ded1c6] pt-3 text-sm">
+          {order.items.map((item) => (
+            <div key={item.menuItemId} className="flex justify-between gap-3">
+              <span className="truncate">
+                {item.quantity}× {item.name}
+              </span>
+              <b>{rupees.format(item.quantity * item.unitPrice)}</b>
+            </div>
+          ))}
+          <div className="mt-2 flex justify-between border-t border-[#eadfd5] pt-2 font-black">
+            <span>Total</span>
+            <span>{rupees.format(order.total)}</span>
+          </div>
+        </div>
+      ) : null}
       {['served', 'completed'].includes(status) && (
         <OrderFeedback orderNumber={orderNumber} phone={phone} />
       )}
@@ -1240,7 +1329,7 @@ function DetailsStep({
                 href="/account"
                 className="text-center text-sm font-bold text-[#6a2116] underline sm:col-span-2"
               >
-                First time or forgot PIN? Verify with OTP
+                First time or forgot PIN? Verify with SMS OTP
               </a>
             </div>
           )}

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         return Response.json(
           {
             error:
-              'OTP service is not connected yet. Add an SMS or WhatsApp OTP provider first.',
+              'SMS OTP service is not connected yet. Add a phone SMS provider first.',
           },
           { status: 503 },
         );
@@ -90,8 +90,9 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           phone,
           otp,
+          channel: 'sms',
           purpose,
-          message: `Your Tripti verification code is ${otp}. It expires in 10 minutes.`,
+          message: `Your Tripti phone verification code is ${otp}. It expires in 10 minutes.`,
         }),
       });
       if (!delivery.ok)

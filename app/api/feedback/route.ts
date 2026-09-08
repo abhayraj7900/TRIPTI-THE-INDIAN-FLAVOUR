@@ -1,5 +1,9 @@
 import { getD1Binding } from '@/db/d1';
-import { normalizePhone, readCustomerSession } from '@/lib/auth';
+import {
+  isStaffRequest,
+  normalizePhone,
+  readCustomerSession,
+} from '@/lib/auth';
 
 type FeedbackInput = {
   orderNumber?: string;
@@ -8,6 +12,42 @@ type FeedbackInput = {
   serviceRating?: number;
   notes?: string;
 };
+
+export async function GET(request: Request) {
+  try {
+    if (!isStaffRequest(request)) {
+      return Response.json(
+        { error: 'Staff sign-in required' },
+        { status: 401 },
+      );
+    }
+    const db = getD1Binding();
+    const { results } = await db
+      .prepare(
+        `SELECT f.order_id AS orderId, o.order_number AS orderNumber,
+          o.order_type AS orderType, o.customer_name AS customerName,
+          f.customer_phone AS customerPhone, f.table_number AS tableNumber,
+          f.food_rating AS foodRating, f.service_rating AS serviceRating,
+          f.notes, f.created_at AS createdAt, f.updated_at AS updatedAt
+         FROM order_feedback f
+         INNER JOIN orders o ON o.id = f.order_id
+         ORDER BY f.updated_at DESC LIMIT 250`,
+      )
+      .all();
+    return Response.json({ reviews: results });
+  } catch (error) {
+    return Response.json(
+      {
+        reviews: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Reviews could not be loaded',
+      },
+      { status: 503 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {

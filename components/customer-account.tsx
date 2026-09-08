@@ -241,7 +241,7 @@ export function CustomerAccount() {
                       disabled={authBusy || phone.replace(/\D/g, '').length < 8}
                       className="h-12 w-full bg-[#6a2116] font-bold hover:bg-[#521008]"
                     >
-                      {authBusy ? 'Sending OTP…' : 'Send verification OTP'}
+                      {authBusy ? 'Sending SMS…' : 'Send OTP by SMS'}
                     </Button>
                   ) : (
                     <>
@@ -255,7 +255,7 @@ export function CustomerAccount() {
                             )
                           }
                           inputMode="numeric"
-                          placeholder="OTP received on your mobile"
+                          placeholder="OTP received by phone SMS"
                           className="h-12"
                         />
                       </label>
