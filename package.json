@@ -11,10 +11,12 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:neon:migrate": "node scripts/migrate-neon.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
+    "@neondatabase/serverless": "^1.1.0",
     "@shadcn/react": "0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
