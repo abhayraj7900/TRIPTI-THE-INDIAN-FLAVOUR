@@ -1187,7 +1187,7 @@ function POSView({
           </span>
         </div>
         {filtered.length ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,128px))] justify-start gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] gap-2">
             {filtered.map((item) => (
               <MenuCard
                 key={item.id}
@@ -1348,7 +1348,7 @@ function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
       type="button"
       onClick={onAdd}
       aria-label={`Add ${item.name} to bill`}
-      className="group relative aspect-square overflow-hidden rounded-xl border border-[#dfd9cf] bg-white p-2.5 text-left shadow-[0_4px_14px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:border-[#bd9e90] hover:shadow-[0_8px_20px_rgba(66,39,25,.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d2416]"
+      className="group relative aspect-[3/2] overflow-hidden rounded-lg border border-[#dfd9cf] bg-white p-2.5 text-left shadow-[0_4px_14px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:border-[#bd9e90] hover:shadow-[0_8px_20px_rgba(66,39,25,.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d2416]"
     >
       <div className="flex h-full flex-col">
         <span
@@ -1358,7 +1358,7 @@ function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
             className={`size-1 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`}
           />
         </span>
-        <h3 className="line-clamp-3 my-auto text-center font-serif text-[13px] font-bold leading-4">
+        <h3 className="line-clamp-2 my-auto text-center font-serif text-[13px] font-bold leading-4">
           {item.name}
         </h3>
         <div className="flex items-end justify-between gap-2">
