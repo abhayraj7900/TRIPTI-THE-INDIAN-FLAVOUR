@@ -42,7 +42,6 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DishPhoto } from '@/components/dish-photo';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1188,7 +1187,7 @@ function POSView({
           </span>
         </div>
         {filtered.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
             {filtered.map((item) => (
               <MenuCard
                 key={item.id}
@@ -1345,42 +1344,33 @@ function POSView({
 
 function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
   return (
-    <article className="group overflow-hidden rounded-[20px] border border-[#dfd9cf] bg-white shadow-[0_8px_30px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_38px_rgba(66,39,25,.11)]">
-      <div className="relative h-32 overflow-hidden">
-        <DishPhoto
-          item={item}
-          className="h-full w-full transition duration-500 group-hover:scale-105"
-        />
+    <button
+      type="button"
+      onClick={onAdd}
+      aria-label={`Add ${item.name} to bill`}
+      className="group relative aspect-square min-h-28 overflow-hidden rounded-2xl border border-[#dfd9cf] bg-white p-3 text-left shadow-[0_6px_20px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:border-[#bd9e90] hover:shadow-[0_12px_28px_rgba(66,39,25,.11)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d2416]"
+    >
+      <div className="flex h-full flex-col">
         <span
-          className={`absolute left-3 top-3 grid size-5 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}
+          className={`grid size-4 shrink-0 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}
         >
           <span
-            className={`size-2 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`}
+            className={`size-1.5 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`}
           />
         </span>
-        <span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#6d2416] shadow-sm">
-          {item.category}
-        </span>
-      </div>
-      <div className="p-3">
-        <h3 className="line-clamp-2 min-h-10 font-serif text-base font-bold leading-5">
+        <h3 className="line-clamp-3 my-auto text-center font-serif text-sm font-bold leading-5 sm:text-base">
           {item.name}
         </h3>
-        <p className="mt-1 truncate text-[13px] leading-4 text-[#7a6960]">
-          {item.note}
-        </p>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="font-bold">{rupees.format(item.price)}</span>
-          <Button
-            onClick={onAdd}
-            size="sm"
-            className="h-9 rounded-full bg-[#f6a622] px-4 text-[#48180f] hover:bg-[#e89a16]"
-          >
-            <Plus /> Add
-          </Button>
+        <div className="flex items-end justify-between gap-2">
+          <span className="text-sm font-black text-[#48180f]">
+            {rupees.format(item.price)}
+          </span>
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#f6a622] text-[#48180f] transition group-hover:bg-[#e89a16]">
+            <Plus className="size-4" />
+          </span>
         </div>
       </div>
-    </article>
+    </button>
   );
 }
 
@@ -1395,7 +1385,6 @@ function CartRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-[#e4ded5] bg-white p-3">
-      <DishPhoto item={item} className="size-10 shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-bold">{item.name}</p>
         <p className="text-sm text-[#7a6960]">{rupees.format(item.price)}</p>
@@ -2812,10 +2801,6 @@ function ContentManager({
                 key={item.id}
                 className={`flex items-center gap-3 rounded-2xl border p-3 ${item.active === false ? 'border-[#e5ded7] bg-[#f5f1ed] opacity-70' : 'border-[#e3dbd3] bg-white'}`}
               >
-                <DishPhoto
-                  item={item}
-                  className="size-16 shrink-0 rounded-xl"
-                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate font-bold">{item.name}</p>
@@ -3205,11 +3190,6 @@ function MenuItemDialog({
               className="block w-full rounded-xl border border-[#ded8ce] p-2 text-sm"
             />
           </label>
-          {draft.photoUrl && (
-            <div className="sm:col-span-2">
-              <DishPhoto item={draft} className="h-40 w-full rounded-2xl" />
-            </div>
-          )}
           {uploading && (
             <p className="text-sm font-bold text-[#6d2416] sm:col-span-2">
               Uploading photo…
