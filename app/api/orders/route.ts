@@ -65,7 +65,7 @@ function totals(items: OrderItemInput[], requestedDiscount = 0) {
 
 export async function GET(request: Request) {
   try {
-    if (!isStaffRequest(request))
+    if (!(await isStaffRequest(request)))
       return Response.json(
         { error: 'Staff sign-in required' },
         { status: 401 },
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    if (!isStaffRequest(request))
+    if (!(await isStaffRequest(request)))
       return Response.json(
         { error: 'Staff sign-in required' },
         { status: 401 },
@@ -372,7 +372,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    if (!isStaffRequest(request))
+    if (!(await isStaffRequest(request)))
       return Response.json(
         { error: 'Staff sign-in required' },
         { status: 401 },

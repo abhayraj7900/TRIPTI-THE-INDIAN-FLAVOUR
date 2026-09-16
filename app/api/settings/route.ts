@@ -14,7 +14,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as Partial<CustomerSettings>;
     const settings: CustomerSettings = {
       offerEnabled: Boolean(input.offerEnabled),

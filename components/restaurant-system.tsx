@@ -798,7 +798,21 @@ export function RestaurantSystem() {
               >
                 <Bell />
               </Button>
-              <div className="hidden items-center gap-3 rounded-full border border-[#ded8ce] bg-white py-1.5 pl-2 pr-4 sm:flex">
+              <Button
+                variant="outline"
+                size="icon-lg"
+                className="rounded-full bg-white"
+                aria-label="Staff security and sign out"
+                onClick={() => {
+                  window.location.href = '/staff-account';
+                }}
+              >
+                <Settings2 />
+              </Button>
+              <a
+                href="/staff-account"
+                className="hidden items-center gap-3 rounded-full border border-[#ded8ce] bg-white py-1.5 pl-2 pr-4 sm:flex"
+              >
                 <span className="grid size-8 place-items-center rounded-full bg-[#f6a622] text-sm font-bold text-[#48180f]">
                   AR
                 </span>
@@ -806,7 +820,7 @@ export function RestaurantSystem() {
                   <p className="font-bold">Abhay Raj</p>
                   <p className="text-xs text-[#876f64]">Manager</p>
                 </div>
-              </div>
+              </a>
             </div>
           </header>
 

@@ -1,12 +1,12 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { RestaurantSystem } from '@/components/restaurant-system';
+import { StaffAccount } from '@/components/staff-account';
 import { isStaffIdentity, readStaffSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Home() {
+export default async function StaffAccountPage() {
   const requestHeaders = await headers();
   const legacyIdentity = isStaffIdentity(
     requestHeaders.get('oai-authenticated-user-id'),
@@ -14,5 +14,6 @@ export default async function Home() {
   );
   const staffSession = await readStaffSession(requestHeaders.get('cookie'));
   if (!legacyIdentity && !staffSession) redirect('/staff-login');
-  return <RestaurantSystem />;
+
+  return <StaffAccount phone={staffSession?.phone ?? ''} />;
 }

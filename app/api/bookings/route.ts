@@ -23,7 +23,7 @@ const allowedStatuses = ['booked', 'completed', 'cancelled'];
 
 export async function GET(request: Request) {
   try {
-    if (!isStaffRequest(request))
+    if (!(await isStaffRequest(request)))
       return Response.json(
         { error: 'Staff sign-in required' },
         { status: 401 },
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   try {
     const input = (await request.json()) as BookingInput;
     const session = await readCustomerSession(request.headers.get('cookie'));
-    const staff = isStaffRequest(request);
+    const staff = await isStaffRequest(request);
     if (!staff && !session)
       return Response.json(
         { error: 'Customer sign-in required for table booking' },
@@ -190,7 +190,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    if (!isStaffRequest(request))
+    if (!(await isStaffRequest(request)))
       return Response.json(
         { error: 'Staff sign-in required' },
         { status: 401 },

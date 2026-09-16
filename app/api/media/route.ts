@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const form = await request.formData();
     const file = form.get('file');
     const folder = form.get('folder') === 'banners' ? 'banners' : 'menu';

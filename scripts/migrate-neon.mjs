@@ -100,6 +100,20 @@ const statements = [
     created_at DOUBLE PRECISION NOT NULL,
     updated_at DOUBLE PRECISION NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS staff_login_attempts (
+    identifier TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updated_at DOUBLE PRECISION NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS staff_accounts (
+    phone TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    pin_salt TEXT NOT NULL,
+    created_at DOUBLE PRECISION NOT NULL,
+    updated_at DOUBLE PRECISION NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS order_feedback (
     order_id TEXT PRIMARY KEY REFERENCES orders(id),
     customer_phone TEXT NOT NULL,

@@ -22,7 +22,7 @@ function clean(input: Partial<StoredMenuItem>, id: number): StoredMenuItem {
 export async function GET(request: Request) {
   try {
     const includeInactive = new URL(request.url).searchParams.get('includeInactive') === '1';
-    if (includeInactive && !isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (includeInactive && !(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const db = getD1Binding();
     const { results } = await db.prepare(
       `SELECT id, name, note, price, category, veg, photo, photo_url AS photoUrl,
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as Partial<StoredMenuItem>;
     const db = getD1Binding();
     const row = await db.prepare('SELECT MAX(id) AS maxId FROM menu_items').first<{ maxId: number | null }>();
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as Partial<StoredMenuItem>;
     const id = Number(input.id);
     if (!Number.isInteger(id) || id < 1) return Response.json({ error: 'Invalid menu item' }, { status: 400 });
@@ -82,7 +82,7 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    if (!isStaffRequest(request)) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
+    if (!(await isStaffRequest(request))) return Response.json({ error: 'Staff sign-in required' }, { status: 401 });
     const input = (await request.json()) as Partial<StoredMenuItem>;
     const id = Number(input.id);
     if (!Number.isInteger(id) || id < 1) return Response.json({ error: 'Invalid menu item' }, { status: 400 });
