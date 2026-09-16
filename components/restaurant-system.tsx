@@ -1187,7 +1187,7 @@ function POSView({
           </span>
         </div>
         {filtered.length ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,128px))] justify-start gap-2">
             {filtered.map((item) => (
               <MenuCard
                 key={item.id}
@@ -1348,25 +1348,25 @@ function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
       type="button"
       onClick={onAdd}
       aria-label={`Add ${item.name} to bill`}
-      className="group relative aspect-square min-h-28 overflow-hidden rounded-2xl border border-[#dfd9cf] bg-white p-3 text-left shadow-[0_6px_20px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:border-[#bd9e90] hover:shadow-[0_12px_28px_rgba(66,39,25,.11)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d2416]"
+      className="group relative aspect-square overflow-hidden rounded-xl border border-[#dfd9cf] bg-white p-2.5 text-left shadow-[0_4px_14px_rgba(66,39,25,.06)] transition hover:-translate-y-0.5 hover:border-[#bd9e90] hover:shadow-[0_8px_20px_rgba(66,39,25,.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d2416]"
     >
       <div className="flex h-full flex-col">
         <span
-          className={`grid size-4 shrink-0 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}
+          className={`grid size-3.5 shrink-0 place-items-center border-2 bg-white ${item.veg ? 'border-emerald-600' : 'border-red-600'}`}
         >
           <span
-            className={`size-1.5 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`}
+            className={`size-1 rounded-full ${item.veg ? 'bg-emerald-600' : 'bg-red-600'}`}
           />
         </span>
-        <h3 className="line-clamp-3 my-auto text-center font-serif text-sm font-bold leading-5 sm:text-base">
+        <h3 className="line-clamp-3 my-auto text-center font-serif text-[13px] font-bold leading-4">
           {item.name}
         </h3>
         <div className="flex items-end justify-between gap-2">
-          <span className="text-sm font-black text-[#48180f]">
+          <span className="text-xs font-black text-[#48180f]">
             {rupees.format(item.price)}
           </span>
-          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#f6a622] text-[#48180f] transition group-hover:bg-[#e89a16]">
-            <Plus className="size-4" />
+          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#f6a622] text-[#48180f] transition group-hover:bg-[#e89a16]">
+            <Plus className="size-3.5" />
           </span>
         </div>
       </div>
